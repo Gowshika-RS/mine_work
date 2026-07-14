@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: mine_safety_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: mine_safety
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: safety_user
+      MYSQL_PASSWORD: safety_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: backend.Dockerfile
+    container_name: mine_safety_backend
+    restart: always
+    environment:
+      - DATABASE_URL=mysql+pymysql://safety_user:safety_password@db:3306/mine_safety
+      - SECRET_KEY=supersecretjwtkeythatshouldbechangedinproduction1234567890
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - UPLOAD_DIR=/app/uploads
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: frontend.Dockerfile
+    container_name: mine_safety_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

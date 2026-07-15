@@ -147,8 +147,8 @@ def seed_db():
                 "zone_type": "restricted",
                 "geometry_type": "circle",
                 "coordinates": {
-                    "latitude": 34.0522,
-                    "longitude": -118.2437,
+                    "latitude": 23.8103,
+                    "longitude": 86.4126,
                     "radius": 100 # meters
                 }
             },
@@ -157,8 +157,8 @@ def seed_db():
                 "zone_type": "high_risk",
                 "geometry_type": "circle",
                 "coordinates": {
-                    "latitude": 34.0530,
-                    "longitude": -118.2420,
+                    "latitude": 23.8115,
+                    "longitude": 86.4135,
                     "radius": 80 # meters
                 }
             },
@@ -167,8 +167,8 @@ def seed_db():
                 "zone_type": "assembly",
                 "geometry_type": "circle",
                 "coordinates": {
-                    "latitude": 34.0510,
-                    "longitude": -118.2450,
+                    "latitude": 23.8090,
+                    "longitude": 86.4110,
                     "radius": 50 # meters
                 }
             },
@@ -177,8 +177,8 @@ def seed_db():
                 "zone_type": "emergency_exit",
                 "geometry_type": "circle",
                 "coordinates": {
-                    "latitude": 34.0550,
-                    "longitude": -118.2400,
+                    "latitude": 23.8140,
+                    "longitude": 86.4160,
                     "radius": 60 # meters
                 }
             },
@@ -187,8 +187,8 @@ def seed_db():
                 "zone_type": "safe",
                 "geometry_type": "circle",
                 "coordinates": {
-                    "latitude": 34.0490,
-                    "longitude": -118.2480,
+                    "latitude": 23.8070,
+                    "longitude": 86.4080,
                     "radius": 150 # meters
                 }
             }

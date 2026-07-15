@@ -203,12 +203,13 @@
 // }
 
 // export default App
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { lightTheme, darkTheme } from "./theme/theme";
 import { useTheme } from "./hooks/useTheme";
 import { MainLayout } from "./components/layout";
+import { GeolocationProvider } from "./context/GeolocationContext";
 
 // Auth Pages
 import { Login, Register, ForgotPassword } from "./pages/auth";
@@ -245,9 +246,25 @@ function App() {
   const [userRole, setUserRole] = useState("worker");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userJson = localStorage.getItem("user");
+    if (token && userJson) {
+      try {
+        const user = JSON.parse(userJson);
+        setIsAuthenticated(true);
+        setUserRole(user.role);
+      } catch (err) {
+        console.error("Failed to restore session:", err);
+      }
+    }
+  }, []);
+
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setIsAuthenticated(false);
     setUserRole("worker");
   };
@@ -273,199 +290,201 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
 
-      <Router>
-        <Routes>
-          {/* Authentication Routes */}
+      <GeolocationProvider userRole={userRole} isAuthenticated={isAuthenticated}>
+        <Router>
+          <Routes>
+            {/* Authentication Routes */}
 
-          <Route
-            path="/login"
-            element={
-              <Login
-                setIsAuthenticated={setIsAuthenticated}
-                setUserRole={setUserRole}
-              />
-            }
-          />
+            <Route
+              path="/login"
+              element={
+                <Login
+                  setIsAuthenticated={setIsAuthenticated}
+                  setUserRole={setUserRole}
+                />
+              }
+            />
 
-          <Route path="/register" element={<Register />} />
+            <Route path="/register" element={<Register />} />
 
-          <Route
-            path="/forgot-password"
-            element={<ForgotPassword />}
-          />
+            <Route
+              path="/forgot-password"
+              element={<ForgotPassword />}
+            />
 
-          {/* Worker Routes */}
+            {/* Worker Routes */}
 
-          <Route
-            path="/worker/dashboard"
-            element={
-              <ProtectedLayout role="worker">
-                <WorkerDashboard />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/dashboard"
+              element={
+                <ProtectedLayout role="worker">
+                  <WorkerDashboard />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/profile"
-            element={
-              <ProtectedLayout role="worker">
-                <Profile />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/profile"
+              element={
+                <ProtectedLayout role="worker">
+                  <Profile />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/shift"
-            element={
-              <ProtectedLayout role="worker">
-                <Shift />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/shift"
+              element={
+                <ProtectedLayout role="worker">
+                  <Shift />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/map"
-            element={
-              <ProtectedLayout role="worker">
-                <Map />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/map"
+              element={
+                <ProtectedLayout role="worker">
+                  <Map />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/hazards"
-            element={
-              <ProtectedLayout role="worker">
-                <WorkerHazards />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/hazards"
+              element={
+                <ProtectedLayout role="worker">
+                  <WorkerHazards />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/checklist"
-            element={
-              <ProtectedLayout role="worker">
-                <Checklist />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/checklist"
+              element={
+                <ProtectedLayout role="worker">
+                  <Checklist />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/recommendations"
-            element={
-              <ProtectedLayout role="worker">
-                <Recommendations />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/recommendations"
+              element={
+                <ProtectedLayout role="worker">
+                  <Recommendations />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/notifications"
-            element={
-              <ProtectedLayout role="worker">
-                <Notifications />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/notifications"
+              element={
+                <ProtectedLayout role="worker">
+                  <Notifications />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/risk-analysis"
-            element={
-              <ProtectedLayout role="worker">
-                <RiskAnalysis />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/risk-analysis"
+              element={
+                <ProtectedLayout role="worker">
+                  <RiskAnalysis />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/worker/ai-prediction"
-            element={
-              <ProtectedLayout role="worker">
-                <AIPrediction />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/worker/ai-prediction"
+              element={
+                <ProtectedLayout role="worker">
+                  <AIPrediction />
+                </ProtectedLayout>
+              }
+            />
 
-          {/* Admin Routes */}
+            {/* Admin Routes */}
 
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedLayout role="admin">
-                <AdminDashboard />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedLayout role="admin">
+                  <AdminDashboard />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/workers"
-            element={
-              <ProtectedLayout role="admin">
-                <Workers />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/workers"
+              element={
+                <ProtectedLayout role="admin">
+                  <Workers />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/worker-details"
-            element={
-              <ProtectedLayout role="admin">
-                <WorkerDetails />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/worker-details"
+              element={
+                <ProtectedLayout role="admin">
+                  <WorkerDetails />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/live-map"
-            element={
-              <ProtectedLayout role="admin">
-                <LiveMap />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/live-map"
+              element={
+                <ProtectedLayout role="admin">
+                  <LiveMap />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/hazards"
-            element={
-              <ProtectedLayout role="admin">
-                <AdminHazards />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/hazards"
+              element={
+                <ProtectedLayout role="admin">
+                  <AdminHazards />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/sos-center"
-            element={
-              <ProtectedLayout role="admin">
-                <SOSCenter />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/sos-center"
+              element={
+                <ProtectedLayout role="admin">
+                  <SOSCenter />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/reports"
-            element={
-              <ProtectedLayout role="admin">
-                <Reports />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/reports"
+              element={
+                <ProtectedLayout role="admin">
+                  <Reports />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/admin/settings"
-            element={
-              <ProtectedLayout role="admin">
-                <Settings />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/admin/settings"
+              element={
+                <ProtectedLayout role="admin">
+                  <Settings />
+                </ProtectedLayout>
+              }
+            />
 
-          {/* Default Routes */}
+            {/* Default Routes */}
 
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </Router>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
+      </GeolocationProvider>
     </ThemeProvider>
   );
 }

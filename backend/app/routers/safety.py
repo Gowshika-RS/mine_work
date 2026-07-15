@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from decimal import Decimal
 from ..database import get_db
-from ..models import SafetyScore, WorkerProfile, User, PrecautionChecklist, Shift, HazardReport, Location
+from ..models import SafetyScore, WorkerProfile, User, PrecautionChecklist, Shift, HazardReport, Location, MineZone
 from ..schemas import SafetyScoreOut, SafetyScoreCreate, PrecautionChecklistOut, PrecautionChecklistCreate
 from ..auth.security import get_current_active_user, require_admin, require_worker, require_any_role
 from ..utils.audit_logging import log_audit
@@ -200,8 +200,48 @@ def get_safety_recommendations(
                     "severity": "high" if hazard.severity in ["high", "critical"] else "medium"
                 })
                 break
-                
-    # 4. Standard safety recommendations as defaults
+
+    # 4. Check location vs Mine Zones for specific zone precautions
+    if last_loc:
+        from ..utils.risk_calculator import calculate_distance
+        zones = db.query(MineZone).all()
+        for zone in zones:
+            coords = zone.coordinates
+            if zone.geometry_type == "circle":
+                center_lat = float(coords.get("latitude", 0))
+                center_lng = float(coords.get("longitude", 0))
+                radius = float(coords.get("radius", 0))
+                dist = calculate_distance(
+                    float(last_loc.latitude), float(last_loc.longitude),
+                    center_lat, center_lng
+                )
+                if dist <= radius:
+                    if zone.zone_type == "restricted":
+                        recommendations.append({
+                            "category": "Restricted Zone Precaution",
+                            "message": f"CRITICAL: You are inside the restricted zone '{zone.name}'. Evacuate immediately! Check for active blasting or structural threats.",
+                            "severity": "high"
+                        })
+                    elif zone.zone_type == "high_risk":
+                        recommendations.append({
+                            "category": "High Risk Zone Precaution",
+                            "message": f"WARNING: You are in the high-risk zone '{zone.name}'. Ensure respirators are tightly fitted and limit exposure.",
+                            "severity": "high"
+                        })
+                    elif zone.zone_type == "safe":
+                        recommendations.append({
+                            "category": "Safe Zone Info",
+                            "message": f"You are in the safe zone '{zone.name}'. Take a rest if needed. Standard safety protocols apply.",
+                            "severity": "low"
+                        })
+                    elif zone.zone_type == "assembly":
+                        recommendations.append({
+                            "category": "Assembly Point Instruction",
+                            "message": f"You are at assembly point '{zone.name}'. Remain calm, stay in your designated group, and wait for supervisor check-in.",
+                            "severity": "medium"
+                        })
+
+    # 5. Standard safety recommendations as defaults
     recommendations.append({
         "category": "General PPE",
         "message": "Ensure your helmet lamp battery is fully charged before entering deep tunnels.",

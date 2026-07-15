@@ -6,7 +6,7 @@ from math import radians, cos, sin, asin, sqrt
 from decimal import Decimal
 from ..database import get_db
 from ..models import Location, User, MineZone, Notification, WorkerProfile
-from ..schemas import LocationOut, LocationCreate
+from ..schemas import LocationOut, LocationCreate, MineZoneOut
 from ..auth.security import get_current_active_user, require_admin, require_worker, require_any_role
 from ..websocket import manager
 from ..utils.audit_logging import log_audit
@@ -176,3 +176,12 @@ def get_current_location(
             detail="No location data available"
         )
     return location
+
+
+@router.get("/zones", response_model=List[MineZoneOut])
+def get_mine_zones(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_any_role)
+):
+    """Retrieve all defined mine zones"""
+    return db.query(MineZone).all()

@@ -139,12 +139,53 @@ export const Recommendations = () => {
       });
     }
 
+    backendRecs.forEach((rec, idx) => {
+      list.push({
+        id: `backend-${idx}`,
+        title: rec.category,
+        description: rec.message,
+        reason: `Based on your profile safety score, shift hours, or mine location status.`,
+        priority: rec.severity === 'high' ? 'Critical' : rec.severity === 'medium' ? 'High' : 'Low',
+        category: 'Safety Protocol',
+        time: now,
+        confidence: 100,
+        status: 'Pending',
+        icon: <Shield color={rec.severity === 'high' ? 'error' : rec.severity === 'medium' ? 'warning' : 'info'} />
+      });
+    });
+
     setRecommendations(list);
+  };
+
+  const [backendRecs, setBackendRecs] = useState([]);
+
+  const fetchBackendRecommendations = async () => {
+    try {
+      const response = await apiClient.get('/safety/recommendations');
+      setBackendRecs(response.data);
+    } catch (err) {
+      console.error("Failed to fetch backend recommendations:", err);
+    }
+  };
+
+  const fetchRiskScore = async () => {
+    try {
+      const profileResponse = await apiClient.get('/users/me');
+      if (profileResponse.data?.profile?.safety_score) {
+        setSafetyScore(parseFloat(profileResponse.data.profile.safety_score));
+      }
+    } catch (err) {
+      console.error("Failed to fetch risk score:", err);
+    }
   };
 
   // Run initial generation and simulate changes every 12 seconds
   useEffect(() => {
-    generateRecommendations();
+    fetchBackendRecommendations();
+    fetchRiskScore();
+
+    const intervalRecs = setInterval(fetchBackendRecommendations, 10000);
+    const intervalScore = setInterval(fetchRiskScore, 15000);
 
     const interval = setInterval(() => {
       // Slightly modify sensors to trigger live safety recalculations
@@ -157,13 +198,17 @@ export const Recommendations = () => {
       }));
     }, 12000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(intervalRecs);
+      clearInterval(intervalScore);
+      clearInterval(interval);
+    };
   }, []);
 
-  // Update recommendations whenever sensors update
+  // Update recommendations whenever sensors or backendRecs update
   useEffect(() => {
     generateRecommendations();
-  }, [sensors]);
+  }, [sensors, backendRecs]);
 
   const handleAction = (id, actionType) => {
     setRecommendations(prev => {

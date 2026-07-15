@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from decimal import Decimal
 from datetime import datetime, timedelta
-from ..models import User, Location, HazardReport, Shift, WorkerProfile
+from ..models import User, Location, HazardReport, Shift, WorkerProfile, MineZone
 from math import radians, cos, sin, asin, sqrt
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -82,7 +82,7 @@ def calculate_risk_level(worker: User, db: Session) -> dict:
     ).order_by(Location.timestamp.desc()).first()
     
     if current_location:
-        # Find hazards reported in the last 24 hours within 500m
+        # Find hazards reported in the last 24 hours
         twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
         nearby_hazards = db.query(HazardReport).filter(
             and_(
@@ -96,19 +96,41 @@ def calculate_risk_level(worker: User, db: Session) -> dict:
         high_hazards = 0
         
         for hazard in nearby_hazards:
-            # Try to extract coordinates from hazard location string (simple implementation)
-            # In production, you might have a location_id or coordinates in the hazard model
-            hazard_count += 1
-            if hazard.severity == "critical":
-                critical_hazards += 1
-                risk_score += 25
-            elif hazard.severity == "high":
-                high_hazards += 1
-                risk_score += 15
-            elif hazard.severity == "medium":
-                risk_score += 8
+            coords = None
+            try:
+                parts = hazard.location.split(",")
+                if len(parts) == 2:
+                    coords = (float(parts[0].strip()), float(parts[1].strip()))
+            except:
+                pass
+            
+            is_nearby = False
+            if coords:
+                dist = calculate_distance(
+                    float(current_location.latitude), float(current_location.longitude),
+                    coords[0], coords[1]
+                )
+                if dist <= 500.0:  # 500m
+                    is_nearby = True
             else:
-                risk_score += 3
+                # Text check fallback
+                worker_loc = worker.profile.mine_location.lower() if worker.profile else ""
+                hazard_loc = hazard.location.lower()
+                if worker_loc and (worker_loc in hazard_loc or hazard_loc in worker_loc):
+                    is_nearby = True
+            
+            if is_nearby:
+                hazard_count += 1
+                if hazard.severity == "critical":
+                    critical_hazards += 1
+                    risk_score += 25
+                elif hazard.severity == "high":
+                    high_hazards += 1
+                    risk_score += 15
+                elif hazard.severity == "medium":
+                    risk_score += 8
+                else:
+                    risk_score += 3
         
         if critical_hazards > 0:
             factors.append({
@@ -125,6 +147,47 @@ def calculate_risk_level(worker: User, db: Session) -> dict:
                 "value": f"{high_hazards} high",
                 "impact": high_hazards * 15
             })
+
+    # Factor 5: Current Location vs Mine Zones (Restricted / High Risk / Safe Zones)
+    if current_location:
+        zones = db.query(MineZone).all()
+        for zone in zones:
+            coords = zone.coordinates
+            if zone.geometry_type == "circle":
+                center_lat = float(coords.get("latitude", 0))
+                center_lng = float(coords.get("longitude", 0))
+                radius = float(coords.get("radius", 0))
+                
+                dist = calculate_distance(
+                    float(current_location.latitude), float(current_location.longitude),
+                    center_lat, center_lng
+                )
+                
+                if dist <= radius:
+                    if zone.zone_type == "restricted":
+                        risk_score += 40
+                        factors.append({
+                            "name": "Inside Restricted Zone",
+                            "weight": "critical",
+                            "value": f"Zone: {zone.name} (Dist: {dist:.1f}m)",
+                            "impact": 40
+                        })
+                    elif zone.zone_type == "high_risk":
+                        risk_score += 25
+                        factors.append({
+                            "name": "Inside High Risk Zone",
+                            "weight": "high",
+                            "value": f"Zone: {zone.name} (Dist: {dist:.1f}m)",
+                            "impact": 25
+                        })
+                    elif zone.zone_type in ["safe", "assembly", "emergency_exit"]:
+                        risk_score -= 15
+                        factors.append({
+                            "name": "Inside Safe Zone",
+                            "weight": "positive",
+                            "value": f"Zone: {zone.name} (Dist: {dist:.1f}m)",
+                            "impact": -15
+                        })
     
     # Factor 4: Active Shift Status
     active_shift = db.query(Shift).filter(

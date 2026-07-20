@@ -1,3 +1,5 @@
+import os
+import google.generativeai as genai
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
@@ -9,6 +11,11 @@ from ..schemas import SafetyScoreOut, SafetyScoreCreate, PrecautionChecklistOut,
 from ..auth.security import get_current_active_user, require_admin, require_worker, require_any_role
 from ..utils.audit_logging import log_audit
 from ..utils.risk_calculator import calculate_risk_level
+
+# Configure Gemini AI
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
 
 router = APIRouter(prefix="/safety", tags=["Safety"])
 
@@ -144,6 +151,7 @@ def get_active_checklist(
 
 @router.get("/recommendations")
 def get_safety_recommendations(
+    lang: Optional[str] = "en",
     db: Session = Depends(get_db),
     worker: User = Depends(require_worker)
 ):
@@ -253,6 +261,28 @@ def get_safety_recommendations(
         "severity": "low"
     })
     
+    # 6. Translate safety recommendations dynamically using Gemini if language is not English and key is set
+    if lang and lang != "en" and api_key and len(recommendations) > 0:
+        try:
+            import json
+            recs_json = json.dumps(recommendations)
+            prompt = f"""
+            You are a translation assistant. Translate the following list of safety recommendations into the preferred language: {lang}.
+            Keep the JSON structure exactly the same. Do not translate the severity values ("high", "medium", "low").
+            Return ONLY the valid JSON list:
+            {recs_json}
+            """
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+            translated_text = response.text
+            if translated_text.startswith("```json"):
+                translated_text = translated_text[7:-3].strip()
+            elif translated_text.startswith("```"):
+                translated_text = translated_text[3:-3].strip()
+            recommendations = json.loads(translated_text)
+        except Exception as e:
+            print("Failed to translate recommendations via Gemini:", e)
+            
     return recommendations
 
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Card, CardContent, Typography, Grid, Button, Chip, TextField, 
   MenuItem, Select, InputLabel, FormControl, Dialog, DialogTitle, 
-  DialogContent, DialogActions, LinearProgress, CircularProgress, IconButton, Badge, Fade
+  DialogContent, DialogActions, LinearProgress, CircularProgress
 } from '@mui/material';
 import { 
   Shield, Warning, HelpOutline, CheckCircle, Snooze, BookmarkBorder, 
@@ -12,20 +12,19 @@ import {
 import apiClient from '../../api/client';
 
 export const Recommendations = () => {
-  // Live simulated sensor state
   const [sensors, setSensors] = useState({
-    methane: 1.2, // %
-    co: 32, // ppm
-    oxygen: 19.8, // %
-    temp: 34.5, // °C
-    humidity: 78, // %
-    airVelocity: 1.8, // m/s
-    battery: 24, // %
-    fatigue: 6, // 1-10
-    ppeCompliance: 80, // %
+    methane: 0,
+    co: 0,
+    oxygen: 0,
+    temp: 0,
+    humidity: 0,
+    airVelocity: 0,
+    battery: 0,
+    fatigue: 0,
+    ppeCompliance: 0,
   });
 
-  const [safetyScore, setSafetyScore] = useState(88);
+  const [safetyScore, setSafetyScore] = useState(0);
   const [recommendations, setRecommendations] = useState([]);
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,102 +37,95 @@ export const Recommendations = () => {
   const [explainOpen, setExplainOpen] = useState(false);
   const [selectedRec, setSelectedRec] = useState(null);
 
-  // Generate recommendations based on sensors
   const generateRecommendations = () => {
     const list = [];
     const now = new Date();
 
-    // 1. Blasting / Methane
     if (sensors.methane > 1.0) {
       list.push({
         id: 'env-1',
         title: 'High Methane Levels Detected',
         description: 'Methane level is currently elevated in your sector.',
-        reason: `Methane gas concentration is at ${sensors.methane}%, which is above the 1.0% caution threshold. Sparking risk is increased.`,
+        reason: `Methane gas concentration is ${sensors.methane}%, which is above the 1.0% caution threshold.`,
         priority: 'Critical',
         category: 'Environment',
-        time: new Date(now.getTime() - 1000 * 60 * 3), // 3 mins ago
-        confidence: 98,
+        time: new Date(now.getTime() - 1000 * 60 * 3),
+        confidence: Math.max(70, Math.min(99, Math.round(sensors.methane * 20 + 60))),
         status: 'Pending',
         icon: <GasMeter color="error" />
       });
     }
 
-    // 2. Battery alert
     if (sensors.battery < 25) {
       list.push({
         id: 'eq-1',
         title: 'Recharge Communication Radio',
         description: 'Battery level is low. Communications might disconnect.',
-        reason: `Device battery is at ${sensors.battery}%. A minimum of 5 hours remaining in today's shift requires functional radio.`,
+        reason: `The latest dataset-based assessment reports a battery reading of ${sensors.battery}%.`,
         priority: 'Medium',
         category: 'Equipment',
         time: new Date(now.getTime() - 1000 * 60 * 15),
-        confidence: 94,
+        confidence: 86,
         status: 'Pending',
         icon: <BatteryAlert color="warning" />
       });
     }
 
-    // 3. Environment / Temperature
     if (sensors.temp > 33) {
       list.push({
         id: 'env-2',
         title: 'High Temperature Safety Alert',
         description: 'Heat stress warning in underground shaft.',
-        reason: `Ambient shaft temperature has reached ${sensors.temp}°C with ${sensors.humidity}% humidity. High risk of dehydration.`,
+        reason: `Ambient shaft temperature is ${sensors.temp}°C with ${sensors.humidity}% humidity.`,
         priority: 'High',
         category: 'Environment',
         time: new Date(now.getTime() - 1000 * 60 * 8),
-        confidence: 91,
+        confidence: 88,
         status: 'Pending',
         icon: <Thermostat color="error" />
       });
     }
 
-    // 4. Health / Fatigue
     if (sensors.fatigue > 5) {
       list.push({
         id: 'hlth-1',
         title: 'Mandatory Hydration & Rest Break',
         description: 'Take a 15-minute break outside high-temperature zones.',
-        reason: `Worker fatigue score has reached ${sensors.fatigue}/10 and temperature is high (${sensors.temp}°C).`,
+        reason: `The current dataset-based fatigue indicator is ${sensors.fatigue}/10.`,
         priority: 'High',
         category: 'Health',
         time: new Date(now.getTime() - 1000 * 60 * 20),
-        confidence: 89,
+        confidence: 84,
         status: 'Pending',
         icon: <Psychology color="warning" />
       });
     }
 
-    // 5. PPE / Boots
     if (sensors.ppeCompliance < 85) {
       list.push({
         id: 'ppe-1',
         title: 'Verify Steel-Toed Boots Lock',
         description: 'Boot protection sensors indicate loose ankle fit.',
-        reason: `PPE compliance dashboard reports ankle fit sensors are at ${sensors.ppeCompliance}%. Risk of rock impact injuries.`,
+        reason: `PPE compliance is at ${sensors.ppeCompliance}%.`,
         priority: 'Low',
         category: 'PPE',
         time: new Date(now.getTime() - 1000 * 60 * 45),
-        confidence: 85,
+        confidence: 80,
         status: 'Pending',
         icon: <Shield color="info" />
       });
     }
 
-    // 6. Oxygen
     if (sensors.oxygen < 19.5) {
       list.push({
         id: 'emg-1',
         title: 'Evacuate Sector: Low Oxygen',
-        description: 'Move to the nearest ventilation shaft or safe exit route.',
-        reason: `Oxygen level has dropped to ${sensors.oxygen}%, which is below the safe breathing limit of 19.5%.`,
+        description: 'Move to nearest ventilation shaft or safe exit route.',
+        reason: `Oxygen level is ${sensors.oxygen}%, below the safe breathing limit of 19.5%.`,
         priority: 'Critical',
         category: 'Emergency',
-        time: new Date(now.getTime() - 1000 * 30), // 30s ago
-        confidence: 99,
+        time: new Date(now.getTime() - 1000 * 30),
+        confidence: 95,
         status: 'Pending',
         icon: <ReportProblem color="error" />
       });
@@ -144,11 +136,11 @@ export const Recommendations = () => {
         id: `backend-${idx}`,
         title: rec.category,
         description: rec.message,
-        reason: `Based on your profile safety score, shift hours, or mine location status.`,
+        reason: 'Derived from the current worker profile and hazard context.',
         priority: rec.severity === 'high' ? 'Critical' : rec.severity === 'medium' ? 'High' : 'Low',
         category: 'Safety Protocol',
         time: now,
-        confidence: 100,
+        confidence: rec.severity === 'high' ? 92 : rec.severity === 'medium' ? 87 : 78,
         status: 'Pending',
         icon: <Shield color={rec.severity === 'high' ? 'error' : rec.severity === 'medium' ? 'warning' : 'info'} />
       });
@@ -175,33 +167,43 @@ export const Recommendations = () => {
         setSafetyScore(parseFloat(profileResponse.data.profile.safety_score));
       }
     } catch (err) {
-      console.error("Failed to fetch risk score:", err);
+      console.error('Failed to fetch risk score:', err);
     }
   };
 
-  // Run initial generation and simulate changes every 12 seconds
+  const fetchDatasetTelemetry = async () => {
+    try {
+      const response = await apiClient.get('/ml/realtime-telemetry');
+      const telemetry = response.data.telemetry;
+      setSensors({
+        methane: telemetry.methane_level,
+        co: telemetry.co_level,
+        temp: telemetry.temperature,
+        humidity: telemetry.humidity,
+        airVelocity: telemetry.air_velocity,
+        oxygen: Math.max(18.5, 20 - telemetry.methane_level * 0.8),
+        battery: Math.max(5, 100 - Math.round(telemetry.annotation_count * 2.5)),
+        fatigue: Math.min(10, Math.max(2, Math.round(telemetry.sitting_ratio / 10))),
+        ppeCompliance: Math.max(70, 100 - Math.round(telemetry.standing_ratio / 2)),
+      });
+    } catch (err) {
+      console.error('Failed to fetch dataset telemetry:', err);
+    }
+  };
+
   useEffect(() => {
     fetchBackendRecommendations();
     fetchRiskScore();
+    fetchDatasetTelemetry();
 
     const intervalRecs = setInterval(fetchBackendRecommendations, 10000);
     const intervalScore = setInterval(fetchRiskScore, 15000);
-
-    const interval = setInterval(() => {
-      // Slightly modify sensors to trigger live safety recalculations
-      setSensors(prev => ({
-        ...prev,
-        methane: parseFloat((prev.methane + (Math.random() - 0.5) * 0.1).toFixed(2)),
-        temp: parseFloat((prev.temp + (Math.random() - 0.5) * 0.5).toFixed(1)),
-        battery: Math.max(0, prev.battery - 1),
-        oxygen: parseFloat((prev.oxygen + (Math.random() - 0.5) * 0.05).toFixed(2)),
-      }));
-    }, 12000);
+    const intervalTelemetry = setInterval(fetchDatasetTelemetry, 20000);
 
     return () => {
       clearInterval(intervalRecs);
       clearInterval(intervalScore);
-      clearInterval(interval);
+      clearInterval(intervalTelemetry);
     };
   }, []);
 

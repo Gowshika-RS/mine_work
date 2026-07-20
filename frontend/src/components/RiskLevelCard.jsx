@@ -18,12 +18,10 @@ export const RiskLevelCard = () => {
   useEffect(() => {
     fetchRiskLevel();
     fetchMlPrediction();
-    
-    // Refresh rule-based risk level every 30 seconds
+
     const intervalRisk = setInterval(fetchRiskLevel, 30000);
-    // Refresh ML prediction every 10 seconds for real-time feel
-    const intervalMl = setInterval(fetchMlPrediction, 10000);
-    
+    const intervalMl = setInterval(fetchMlPrediction, 20000);
+
     return () => {
       clearInterval(intervalRisk);
       clearInterval(intervalMl);

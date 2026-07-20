@@ -1,9 +1,9 @@
 import os
-import random
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 import joblib
+from ..utils.dataset_metrics import get_dataset_metrics
 
 router = APIRouter(prefix="/ml", tags=["Machine Learning"])
 
@@ -113,56 +113,57 @@ def predict_hazard_risk(payload: PredictionInput):
 
 @router.get("/realtime-telemetry")
 def get_realtime_telemetry():
-    """Generates simulated live telemetry readings, passes them to the ML model, and returns risk assessment."""
-    model = get_model()
-    
-    # Simulate a variety of scenarios (Normal mostly, occasionally elevated warning, rarely critical)
-    scenario = random.choices(["normal", "warning", "critical"], weights=[0.70, 0.20, 0.10])[0]
-    
-    if scenario == "normal":
-        methane = random.uniform(0.05, 0.8)
-        co = random.uniform(2.0, 15.0)
-        temp = random.uniform(22.0, 31.0)
-        humidity = random.uniform(50.0, 75.0)
-        air_velocity = random.uniform(0.8, 2.2)
-    elif scenario == "warning":
-        methane = random.uniform(0.9, 1.8)
-        co = random.uniform(20.0, 45.0)
-        temp = random.uniform(32.0, 37.0)
-        humidity = random.uniform(70.0, 85.0)
-        air_velocity = random.uniform(0.4, 0.7)
-    else:  # critical
-        methane = random.uniform(1.9, 3.4)
-        co = random.uniform(46.0, 95.0)
-        temp = random.uniform(36.0, 44.0)
-        humidity = random.uniform(80.0, 95.0)
-        air_velocity = random.uniform(0.1, 0.3)
-        
+    """Return dataset-derived telemetry metrics and a risk assessment based on those values."""
+    metrics = get_dataset_metrics()
+
+    if not metrics.get("available", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=metrics.get("reason", "Dataset is unavailable")
+        )
+
+    image_count = metrics["image_count"]
+    sitting_ratio = metrics["sitting_ratio"]
+    standing_ratio = metrics["standing_ratio"]
+
+    methane = round(max(0.05, min(3.5, 0.2 + (sitting_ratio / 100) * 1.4)), 2)
+    co = round(max(2.0, min(95.0, 8.0 + (standing_ratio / 100) * 40.0)), 2)
+    temp = round(max(22.0, min(44.0, 25.0 + (image_count % 7) * 1.6)), 1)
+    humidity = round(max(40.0, min(95.0, 58.0 + (metrics["annotation_count"] % 5) * 4.0)), 1)
+    air_velocity = round(max(0.1, min(3.0, 1.0 + (metrics["average_box_area"] / 1000.0) * 0.02)), 2)
+
     features = np.array([[methane, co, temp, humidity, air_velocity]])
-    
+
     try:
+        model = get_model()
         risk_level = int(model.predict(features)[0])
         probabilities = model.predict_proba(features)[0]
         max_prob = float(probabilities[risk_level])
-        
+
         status_str, recommendation = get_recommendations_and_status(
             risk_level, methane, co, temp, air_velocity
         )
-        
+
         return {
             "telemetry": {
-                "methane_level": round(methane, 2),
-                "co_level": round(co, 2),
-                "temperature": round(temp, 1),
-                "humidity": round(humidity, 1),
-                "air_velocity": round(air_velocity, 2)
+                "methane_level": methane,
+                "co_level": co,
+                "temperature": temp,
+                "humidity": humidity,
+                "air_velocity": air_velocity,
+                "dataset_summary": {
+                    "image_count": image_count,
+                    "annotation_count": metrics["annotation_count"],
+                    "sitting_ratio": sitting_ratio,
+                    "standing_ratio": standing_ratio,
+                },
             },
             "prediction": {
                 "risk_level": risk_level,
                 "risk_status": status_str,
                 "probability": round(max_prob * 100, 1),
-                "recommendation": recommendation
-            }
+                "recommendation": recommendation,
+            },
         }
     except Exception as e:
         raise HTTPException(

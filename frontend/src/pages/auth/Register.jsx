@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Box, Card, TextField, Button, Typography, Link, Container, Alert, FormControl, InputLabel, Select, MenuItem, Grid } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 
 export const Register = () => {
@@ -18,6 +18,15 @@ export const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const selectedRole = params.get('role');
+    if (selectedRole && ['worker', 'supervisor', 'admin'].includes(selectedRole)) {
+      setFormData((prev) => ({ ...prev, role: selectedRole }));
+    }
+  }, [location.search]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

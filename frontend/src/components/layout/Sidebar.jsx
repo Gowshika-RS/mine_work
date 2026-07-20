@@ -31,6 +31,11 @@ import {
   Schedule,
   Checklist,
   Lightbulb,
+  ManageAccounts,
+  HealthAndSafety,
+  Announcement,
+  Build,
+  FactCheck,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -71,6 +76,19 @@ export const Sidebar = ({ isDarkMode, onThemeToggle, userRole = 'worker', onLogo
         { label: 'SOS Center', icon: <Emergency />, path: '/admin/sos-center' },
         { label: 'Reports', icon: <Assessment />, path: '/admin/reports' },
         { label: 'Settings', icon: <Settings />, path: '/admin/settings' },
+      ];
+    }
+
+    if (userRole === 'supervisor') {
+      return [
+        ...commonItems,
+        { label: 'Workers', icon: <ManageAccounts />, path: '/supervisor/workers' },
+        { label: 'Shifts', icon: <Schedule />, path: '/supervisor/shifts' },
+        { label: 'Leave Requests', icon: <FactCheck />, path: '/supervisor/leave-requests' },
+        { label: 'Hazards', icon: <Warning />, path: '/supervisor/hazards' },
+        { label: 'Health', icon: <HealthAndSafety />, path: '/supervisor/health' },
+        { label: 'Announcements', icon: <Announcement />, path: '/supervisor/announcements' },
+        { label: 'Equipment', icon: <Build />, path: '/supervisor/equipment' },
       ];
     }
 

@@ -32,6 +32,9 @@ class User(Base):
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
     received_messages = relationship("Message", foreign_keys="Message.receiver_id", back_populates="receiver")
     health_assessments = relationship("HealthAssessment", back_populates="worker", cascade="all, delete-orphan")
+    leave_requests = relationship("LeaveRequest", foreign_keys="LeaveRequest.worker_id", back_populates="worker", cascade="all, delete-orphan")
+    reviewed_leaves = relationship("LeaveRequest", foreign_keys="LeaveRequest.reviewed_by", back_populates="reviewer")
+    announcements = relationship("SupervisorAnnouncement", back_populates="author", cascade="all, delete-orphan")
 
 
 class WorkerProfile(Base):
@@ -102,6 +105,15 @@ class HazardReport(Base):
     status = Column(String(20), default="open", nullable=False)  # 'open', 'under_review', 'resolved'
     investigator_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     remarks = Column(Text, nullable=True)
+    
+    # AI Hazard Detection Fields
+    risk_level = Column(String(50), nullable=True)
+    precautions = Column(Text, nullable=True)
+    required_ppe = Column(Text, nullable=True)
+    immediate_actions = Column(Text, nullable=True)
+    notify_who = Column(String(100), nullable=True)
+    ai_analysis = Column(JSON, nullable=True)
+
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -187,6 +199,48 @@ class Notification(Base):
 
     # Relationships
     user = relationship("User", back_populates="notifications")
+
+
+class LeaveRequest(Base):
+    __tablename__ = "leave_requests"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    reason = Column(Text, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    status = Column(String(20), default="pending", nullable=False)
+    reviewed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    worker = relationship("User", foreign_keys=[worker_id], back_populates="leave_requests")
+    reviewer = relationship("User", foreign_keys=[reviewed_by], back_populates="reviewed_leaves")
+
+
+class SupervisorAnnouncement(Base):
+    __tablename__ = "supervisor_announcements"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    priority = Column(String(20), default="info", nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    author = relationship("User", back_populates="announcements")
+
+
+class EquipmentStatus(Base):
+    __tablename__ = "equipment_status"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(150), nullable=False)
+    category = Column(String(100), nullable=False)
+    status = Column(String(30), default="operational", nullable=False)
+    zone = Column(String(100), nullable=False)
+    last_checked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
 
 
 class MineZone(Base):

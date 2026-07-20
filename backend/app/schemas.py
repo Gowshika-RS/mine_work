@@ -179,6 +179,13 @@ class HazardReportBase(BaseModel):
     severity: str
     description: str
     location: str
+    # AI Fields
+    risk_level: Optional[str] = None
+    precautions: Optional[str] = None
+    required_ppe: Optional[str] = None
+    immediate_actions: Optional[str] = None
+    notify_who: Optional[str] = None
+    ai_analysis: Optional[Any] = None
 
 class HazardReportCreate(HazardReportBase):
     pass
@@ -187,6 +194,13 @@ class HazardReportUpdate(BaseModel):
     status: Optional[str] = None
     investigator_id: Optional[int] = None
     remarks: Optional[str] = None
+    # AI Fields
+    risk_level: Optional[str] = None
+    precautions: Optional[str] = None
+    required_ppe: Optional[str] = None
+    immediate_actions: Optional[str] = None
+    notify_who: Optional[str] = None
+    ai_analysis: Optional[Any] = None
 
 class HazardReportOut(HazardReportBase):
     id: int
@@ -406,9 +420,64 @@ class HealthAssessmentOut(BaseModel):
     class Config:
         from_attributes = True
 
+# --- Supervisor Schemas ---
+class LeaveRequestCreate(BaseModel):
+    worker_id: int
+    reason: str
+    start_date: date
+    end_date: date
+
+class LeaveRequestOut(BaseModel):
+    id: int
+    worker_id: int
+    reason: str
+    start_date: date
+    end_date: date
+    status: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AnnouncementCreate(BaseModel):
+    title: str
+    message: str
+    priority: str = "info"
+
+class AnnouncementOut(AnnouncementCreate):
+    id: int
+    created_by: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class EquipmentStatusCreate(BaseModel):
+    name: str
+    category: str
+    status: str = "operational"
+    zone: str
+    last_checked_at: Optional[datetime] = None
+
+class EquipmentStatusOut(EquipmentStatusCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ShiftAssignmentCreate(BaseModel):
+    worker_id: int
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    attendance_status: str = "present"
+
 # --- AI Assistant Schemas ---
 class AIQuestion(BaseModel):
     question: str
+    language: Optional[str] = "en"
 
 class AIAnswer(BaseModel):
     question: str

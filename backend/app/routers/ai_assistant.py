@@ -1,7 +1,14 @@
+import os
+import google.generativeai as genai
 from fastapi import APIRouter, Depends
 from ..models import User
 from ..schemas import AIQuestion, AIAnswer
 from ..auth.security import require_any_role
+
+# Configure Gemini AI
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
 
 router = APIRouter(prefix="/ai", tags=["AI Safety Assistant"])
 
@@ -326,7 +333,51 @@ def ask_ai_assistant(
     user: User = Depends(require_any_role)
 ):
     """Ask the AI Safety Assistant a question about mining safety"""
+    lang = payload.language or "en"
+    
+    # 1. Try Gemini generation if API key is configured
+    if api_key:
+        try:
+            prompt = f"""
+            You are an expert mine safety AI assistant. A mine worker is asking you a safety or emergency question.
+            Question: "{payload.question}"
+            
+            Provide a clear, practical, and action-oriented answer in the preferred language: {lang}.
+            Ensure the tone is professional, reassuring, and safety-focused.
+            Keep the response relatively concise (1-3 brief paragraphs).
+            If the question is not related to mining safety, hazards, health, or emergency response, politely guide the worker back to safety-related questions.
+            """
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+            return {
+                "question": payload.question,
+                "answer": response.text,
+                "category": "AI Safety Advisor",
+                "related_questions": []
+            }
+        except Exception as e:
+            print("Gemini generation failed, falling back to local KB:", e)
+            
+    # 2. Fallback to keyword-based answering
     result = find_best_answer(payload.question)
+    
+    # Translate fallback answer if language is not English and Gemini is available
+    if lang != "en" and api_key:
+        try:
+            prompt = f"""
+            Translate the following safety instruction text into the preferred language: {lang}.
+            Keep any markdown formatting intact.
+            
+            Text:
+            {result['answer']}
+            """
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+            result["answer"] = response.text
+            result["category"] = f"{result['category']} ({lang.upper()})"
+        except Exception as e:
+            print("Fallback translation failed:", e)
+            
     return result
 
 

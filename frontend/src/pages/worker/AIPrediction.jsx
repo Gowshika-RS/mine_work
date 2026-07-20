@@ -32,8 +32,7 @@ export const AIPrediction = () => {
 
   useEffect(() => {
     fetchTelemetry();
-    // Refresh telemetry every 6 seconds to show dynamic sensor fluctuations
-    const interval = setInterval(fetchTelemetry, 6000);
+    const interval = setInterval(fetchTelemetry, 20000);
     return () => clearInterval(interval);
   }, []);
 

@@ -1,25 +1,53 @@
-import { Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, TextField, InputAdornment, Chip } from '@mui/material';
+import { useEffect, useMemo, useState } from 'react';
+import { Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, TextField, InputAdornment, Chip, Alert, CircularProgress } from '@mui/material';
 import { Search, Edit, Delete } from '@mui/icons-material';
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import apiClient from '../../api/client';
+import { toWorkerRows } from './adminData';
 
 export const Workers = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [workers, setWorkers] = useState([
-    { id: 1, name: 'John Doe', email: 'john@example.com', department: 'Manufacturing', status: 'active', safetyScore: 92 },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', department: 'Warehouse', status: 'active', safetyScore: 88 },
-    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', department: 'Maintenance', status: 'inactive', safetyScore: 76 },
-    { id: 4, name: 'Sarah Williams', email: 'sarah@example.com', department: 'Manufacturing', status: 'active', safetyScore: 95 },
-  ]);
+  const [workers, setWorkers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const filteredWorkers = workers.filter(
-    (worker) =>
-      worker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      worker.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const loadWorkers = async () => {
+      try {
+        const response = await apiClient.get('/admin/workers');
+        setWorkers(toWorkerRows(response.data));
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Unable to load workers');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleDelete = (id) => {
-    setWorkers((prev) => prev.filter((w) => w.id !== id));
+    loadWorkers();
+  }, []);
+
+  const filteredWorkers = useMemo(() => workers.filter((worker) => {
+    const haystack = `${worker.fullName} ${worker.email} ${worker.department}`.toLowerCase();
+    return haystack.includes(searchTerm.toLowerCase());
+  }), [workers, searchTerm]);
+
+  const handleDelete = async (id) => {
+    try {
+      await apiClient.put(`/admin/workers/${id}/status?is_active=false`);
+      setWorkers((prev) => prev.map((worker) => worker.id === id ? { ...worker, status: 'inactive' } : worker));
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Unable to update worker');
+    }
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ py: 3 }}>
@@ -27,14 +55,16 @@ export const Workers = () => {
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
           Workers Management
         </Typography>
-        <Button variant="contained">Add Worker</Button>
+        <Button variant="contained" onClick={() => navigate('/admin/worker-details')}>View Details</Button>
       </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <TextField
             fullWidth
-            placeholder="Search by name or email..."
+            placeholder="Search by name, email, or department..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -63,7 +93,7 @@ export const Workers = () => {
           <TableBody>
             {filteredWorkers.map((worker) => (
               <TableRow key={worker.id}>
-                <TableCell>{worker.name}</TableCell>
+                <TableCell>{worker.fullName}</TableCell>
                 <TableCell>{worker.email}</TableCell>
                 <TableCell>{worker.department}</TableCell>
                 <TableCell>
@@ -73,9 +103,9 @@ export const Workers = () => {
                     size="small"
                   />
                 </TableCell>
-                <TableCell>{worker.safetyScore}%</TableCell>
+                <TableCell>{worker.safetyScore.toFixed(1)}%</TableCell>
                 <TableCell>
-                  <Button size="small" startIcon={<Edit />} />
+                  <Button size="small" startIcon={<Edit />} onClick={() => navigate('/admin/worker-details')} />
                   <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDelete(worker.id)} />
                 </TableCell>
               </TableRow>

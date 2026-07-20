@@ -1,14 +1,24 @@
-import { useState } from 'react';
-import { Box, Card, TextField, Button, Typography, Link, Container, Alert } from '@mui/material';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Box, Card, TextField, Button, Typography, Link, Container, Alert, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 
 export const Login = ({ setIsAuthenticated, setUserRole }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('worker');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const selectedRole = params.get('role');
+    if (selectedRole && ['worker', 'supervisor', 'admin'].includes(selectedRole)) {
+      setRole(selectedRole);
+    }
+  }, [location.search]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,6 +37,12 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
         password: password,
       });
 
+      if (role !== 'worker' && response.data.role !== role) {
+        setError(`This account is not assigned as ${role}. Please use the matching role account.`);
+        setLoading(false);
+        return;
+      }
+
       if (response.data && response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);
         localStorage.setItem('user', JSON.stringify(response.data));
@@ -36,6 +52,8 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
 
         if (response.data.role === 'admin') {
           navigate('/admin/dashboard');
+        } else if (response.data.role === 'supervisor') {
+          navigate('/supervisor/dashboard');
         } else {
           navigate('/worker/dashboard');
         }
@@ -73,6 +91,14 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
               disabled={loading}
               required
             />
+            <FormControl fullWidth margin="normal" disabled={loading}>
+              <InputLabel>Role Access</InputLabel>
+              <Select value={role} label="Role Access" onChange={(e) => setRole(e.target.value)}>
+                <MenuItem value="worker">Worker</MenuItem>
+                <MenuItem value="supervisor">Supervisor</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+              </Select>
+            </FormControl>
             <TextField
               fullWidth
               label="Password"

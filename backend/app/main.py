@@ -8,14 +8,36 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from .database import engine, Base, get_db
+from .database import engine, Base, get_db, SessionLocal
 from .config import settings
 from .websocket import manager
-from .routers import auth, users, workers, shifts, locations, hazards, safety, sos, notifications, reports
-from .models import MineZone
+from .routers import auth, users, workers, shifts, locations, hazards, safety, sos, notifications, reports, supervisor, ai_hazard
+from .models import MineZone, User
+from .auth.security import get_password_hash
 
 # Auto-create tables (handy for quick deployment/development setups)
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_supervisor_user():
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username == "supervisor").first()
+        if not existing:
+            supervisor_user = User(
+                username="supervisor",
+                email="supervisor@minesafety.com",
+                hashed_password=get_password_hash("supervisorpassword"),
+                role="supervisor",
+                is_active=True,
+            )
+            db.add(supervisor_user)
+            db.commit()
+    finally:
+        db.close()
+
+
+ensure_supervisor_user()
 
 # Set up Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -52,6 +74,7 @@ app.include_router(shifts.router, prefix="/api")
 app.include_router(locations.router, prefix="/api")
 app.include_router(hazards.router, prefix="/api")
 app.include_router(safety.router, prefix="/api")
+app.include_router(ai_hazard.router, prefix="/api")
 # app.include_router(sos.router, prefix="/api")
 # app.include_router(notifications.router, prefix="/api")
 # app.include_router(reports.router, prefix="/api")
@@ -124,6 +147,7 @@ from .routers import (
     training,
     health,
     ai_assistant,
+    admin,
 )
 
 # --------------------------------------------------
@@ -202,6 +226,8 @@ app.include_router(messages.router, prefix="/api")
 app.include_router(training.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
 app.include_router(ai_assistant.router, prefix="/api")
+app.include_router(supervisor.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 # --------------------------------------------------
 # Root Endpoint

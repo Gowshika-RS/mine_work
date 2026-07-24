@@ -1,5 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Box, Card, TextField, Button, Typography, Link, Container, Alert, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import {
+  Box,
+  Card,
+  TextField,
+  Button,
+  Typography,
+  Link,
+  Container,
+  Alert,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  CircularProgress,
+} from '@mui/material';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 
@@ -23,62 +37,77 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanUsername || !cleanPassword) {
+      setError('Please enter your username and password.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (!username || !password) {
-        setError('Please fill in all fields');
-        setLoading(false);
-        return;
-      }
-
       const response = await apiClient.post('/auth/login', {
-        username: username,
-        password: password,
+        username: cleanUsername,
+        password: cleanPassword,
       });
 
-      if (role !== 'worker' && response.data.role !== role) {
-        setError(`This account is not assigned as ${role}. Please use the matching role account.`);
+      const userRoleFromBackend = response.data?.role;
+      const accessToken = response.data?.access_token;
+
+      if (!accessToken || !userRoleFromBackend) {
+        setError('Invalid response received from authentication server.');
         setLoading(false);
         return;
       }
 
-      if (response.data && response.data.access_token) {
-        localStorage.setItem('token', response.data.access_token);
-        localStorage.setItem('user', JSON.stringify(response.data));
-        
-        setIsAuthenticated(true);
-        setUserRole(response.data.role);
+      // Store auth token and user object in local storage
+      localStorage.setItem('token', accessToken);
+      localStorage.setItem('user', JSON.stringify(response.data));
 
-        if (response.data.role === 'admin') {
-          navigate('/admin/dashboard');
-        } else if (response.data.role === 'supervisor') {
-          navigate('/supervisor/dashboard');
-        } else {
-          navigate('/worker/dashboard');
-        }
-      } else {
-        setError('Invalid response from server');
-      }
-    } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Login failed');
-    } finally {
+      // Update parent React state
+      if (setIsAuthenticated) setIsAuthenticated(true);
+      if (setUserRole) setUserRole(userRoleFromBackend);
+
+      // Target dashboard selection based on backend user role
+      const targetPath =
+        userRoleFromBackend === 'admin'
+          ? '/admin/dashboard'
+          : userRoleFromBackend === 'supervisor'
+          ? '/supervisor/dashboard'
+          : '/worker/dashboard';
+
       setLoading(false);
+      navigate(targetPath, { replace: true });
+    } catch (err) {
+      console.error('Login error:', err);
+      setLoading(false);
+      setError(
+        err.response?.data?.detail ||
+          err.message ||
+          'Login failed. Incorrect username or password.'
+      );
     }
   };
 
   return (
     <Container maxWidth="sm">
-      <Box sx={{ display: 'flex', minHeight: '100vh', alignItems: 'center' }}>
-        <Card sx={{ width: '100%', p: 4 }}>
-          <Typography variant="h3" align="center" sx={{ mb: 4, fontWeight: 'bold' }}>
-            Safety App
+      <Box sx={{ display: 'flex', minHeight: '100vh', alignItems: 'center', py: 4 }}>
+        <Card sx={{ width: '100%', p: 4, borderRadius: 3, boxShadow: '0 8px 32px rgba(0,0,0,0.1)' }}>
+          <Typography variant="h3" align="center" sx={{ mb: 1, fontWeight: 'bold', color: 'primary.main' }}>
+            MineGuard
           </Typography>
-          <Typography variant="h5" align="center" sx={{ mb: 3, color: 'text.secondary' }}>
-            Worker Login
+          <Typography variant="subtitle1" align="center" color="textSecondary" sx={{ mb: 3 }}>
+            Offline Mine Worker Safety Companion
           </Typography>
 
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
           <form onSubmit={handleSubmit}>
             <TextField
@@ -90,7 +119,9 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
               margin="normal"
               disabled={loading}
               required
+              autoFocus
             />
+
             <FormControl fullWidth margin="normal" disabled={loading}>
               <InputLabel>Role Access</InputLabel>
               <Select value={role} label="Role Access" onChange={(e) => setRole(e.target.value)}>
@@ -99,6 +130,7 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
                 <MenuItem value="admin">Admin</MenuItem>
               </Select>
             </FormControl>
+
             <TextField
               fullWidth
               label="Password"
@@ -110,21 +142,23 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
               required
               sx={{ mb: 3 }}
             />
+
             <Button
               fullWidth
               variant="contained"
               size="large"
               type="submit"
               disabled={loading}
-              sx={{ mb: 2 }}
+              sx={{ py: 1.5, fontSize: '1.1rem', fontWeight: 'bold' }}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
             >
               {loading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3, flexWrap: 'wrap', gap: 1 }}>
             <Link component={RouterLink} to="/register" underline="hover">
-              Register
+              Register New Account
             </Link>
             <Link component={RouterLink} to="/forgot-password" underline="hover">
               Forgot Password?

@@ -640,6 +640,8 @@ import {
   Hazards as AdminHazards,
   SOSCenter,
   Reports,
+  Notifications as AdminNotifications,
+  UserManagement,
   Settings,
 } from "./pages/admin";
 
@@ -918,6 +920,24 @@ function App() {
             />
 
             <Route
+              path="/admin/notifications"
+              element={
+                <ProtectedLayout role="admin">
+                  <AdminNotifications />
+                </ProtectedLayout>
+              }
+            />
+
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedLayout role="admin">
+                  <UserManagement />
+                </ProtectedLayout>
+              }
+            />
+
+            <Route
               path="/admin/settings"
               element={
                 <ProtectedLayout role="admin">
@@ -1012,7 +1032,7 @@ function App() {
                     <Navigate to="/worker/dashboard" replace />
                   )
                 ) : (
-                  <Navigate to="/" replace />
+                  <HomePage />
                 )
               }
             />

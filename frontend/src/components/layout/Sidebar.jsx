@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Drawer,
   List,
@@ -11,6 +11,7 @@ import {
   Box,
   Tooltip,
   Button,
+  Badge,
 } from '@mui/material';
 
 import {
@@ -43,6 +44,22 @@ export const Sidebar = ({ isDarkMode, onThemeToggle, userRole = 'worker', onLogo
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await apiClient.get('/notifications/unread-count');
+        setUnreadCount(response.data?.unread_count || 0);
+      } catch (err) {
+        // Silently ignore if unauthenticated
+      }
+    };
+
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getMenuItems = () => {
     const commonItems = [
@@ -62,7 +79,7 @@ export const Sidebar = ({ isDarkMode, onThemeToggle, userRole = 'worker', onLogo
         { label: 'Hazards', icon: <Warning />, path: '/worker/hazards' },
         { label: 'Checklist', icon: <Checklist />, path: '/worker/checklist' },
         { label: 'Recommendations', icon: <Lightbulb />, path: '/worker/recommendations' },
-        { label: 'Notifications', icon: <NotificationsActive />, path: '/worker/notifications' },
+        { label: 'Notifications', icon: <NotificationsActive />, path: '/worker/notifications', badge: unreadCount },
       ];
     }
 
@@ -71,9 +88,11 @@ export const Sidebar = ({ isDarkMode, onThemeToggle, userRole = 'worker', onLogo
         ...commonItems,
         { label: 'Workers', icon: <People />, path: '/admin/workers' },
         { label: 'Worker Details', icon: <Person />, path: '/admin/worker-details' },
+        { label: 'User Management', icon: <ManageAccounts />, path: '/admin/users' },
         { label: 'Live Map', icon: <Map />, path: '/admin/live-map' },
         { label: 'Hazards', icon: <Warning />, path: '/admin/hazards' },
         { label: 'SOS Center', icon: <Emergency />, path: '/admin/sos-center' },
+        { label: 'Notifications', icon: <NotificationsActive />, path: '/admin/notifications', badge: unreadCount },
         { label: 'Reports', icon: <Assessment />, path: '/admin/reports' },
         { label: 'Settings', icon: <Settings />, path: '/admin/settings' },
       ];
@@ -130,7 +149,15 @@ export const Sidebar = ({ isDarkMode, onThemeToggle, userRole = 'worker', onLogo
                   },
                 }}
               >
-                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemIcon>
+                  {item.badge ? (
+                    <Badge badgeContent={item.badge} color="error">
+                      {item.icon}
+                    </Badge>
+                  ) : (
+                    item.icon
+                  )}
+                </ListItemIcon>
                 <ListItemText primary={item.label} />
               </ListItemButton>
             </ListItem>

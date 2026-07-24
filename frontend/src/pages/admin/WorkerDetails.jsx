@@ -1,143 +1,291 @@
 import { useEffect, useState } from 'react';
-import { Box, Card, CardContent, Typography, Grid, Avatar, Button, Divider, Chip, CircularProgress, Alert } from '@mui/material';
-import { Email, Phone, LocationOn, VerifiedUser, Work } from '@mui/icons-material';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  Avatar,
+  Button,
+  Divider,
+  Chip,
+  CircularProgress,
+  Alert,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+} from '@mui/material';
+import { Email, Phone, LocationOn, VerifiedUser, Work, ArrowBack, History, WarningAmber } from '@mui/icons-material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 
 export const WorkerDetails = () => {
-  const [worker, setWorker] = useState(null);
+  const [workerData, setWorkerData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const queryParams = new URLSearchParams(location.search);
+  const workerIdParam = queryParams.get('id');
 
   useEffect(() => {
-    const loadWorker = async () => {
+    const loadWorkerDetails = async () => {
+      setLoading(true);
+      setError('');
       try {
-        const response = await apiClient.get('/admin/workers');
-        const firstWorker = response.data?.[0];
-        if (firstWorker) {
-          setWorker(firstWorker);
-        } else {
-          setError('No worker records found');
+        let workerId = workerIdParam;
+        if (!workerId) {
+          // Fallback to first available worker
+          const res = await apiClient.get('/admin/workers');
+          if (res.data && res.data.length > 0) {
+            workerId = res.data[0].id;
+          } else {
+            setError('No worker accounts registered in system');
+            setLoading(false);
+            return;
+          }
         }
+        const response = await apiClient.get(`/admin/workers/${workerId}`);
+        setWorkerData(response.data);
       } catch (err) {
-        setError(err.response?.data?.detail || 'Unable to load worker details');
+        setError(err.response?.data?.detail || 'Unable to fetch worker details');
       } finally {
         setLoading(false);
       }
     };
 
-    loadWorker();
-  }, []);
+    loadWorkerDetails();
+  }, [workerIdParam]);
 
   if (loading) {
     return (
-      <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
+      <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress size={44} />
       </Box>
     );
   }
 
-  if (error || !worker) {
-    return <Alert severity="error" sx={{ mt: 3 }}>{error || 'Unable to load worker details'}</Alert>;
+  if (error || !workerData) {
+    return (
+      <Box sx={{ py: 3 }}>
+        <Button startIcon={<ArrowBack />} onClick={() => navigate('/admin/workers')} sx={{ mb: 2 }}>
+          Back to Workers List
+        </Button>
+        <Alert severity="error">{error || 'Worker record unavailable'}</Alert>
+      </Box>
+    );
   }
 
-  const profile = worker.profile || {};
-  const initials = (profile.full_name || worker.username || 'W').split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase();
+  const { user, profile, shifts, hazards, sos_alerts, safety_history } = workerData;
+  const initials = (profile?.full_name || user?.username || 'W')
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   return (
     <Box sx={{ py: 3 }}>
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold' }}>
-        Worker Details
-      </Typography>
+      {/* Navigation Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button startIcon={<ArrowBack />} variant="outlined" onClick={() => navigate('/admin/workers')}>
+          Back to Workers
+        </Button>
+        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+          Worker Profile & History
+        </Typography>
+      </Box>
 
       <Grid container spacing={3}>
+        {/* Left Column: Avatar & Summary Card */}
         <Grid item xs={12} md={4}>
-          <Card sx={{ textAlign: 'center' }}>
+          <Card sx={{ textAlign: 'center', p: 1 }}>
             <CardContent>
-              <Avatar sx={{ width: 120, height: 120, mx: 'auto', mb: 2, fontSize: '3rem' }}>
+              <Avatar sx={{ width: 110, height: 110, mx: 'auto', mb: 2, fontSize: '2.5rem', bgcolor: 'primary.main' }}>
                 {initials}
               </Avatar>
-              <Typography variant="h6">{profile.full_name || worker.username}</Typography>
-              <Chip label={worker.is_active ? 'active' : 'inactive'} color={worker.is_active ? 'success' : 'default'} sx={{ my: 1 }} />
-              <Typography variant="h4" sx={{ color: 'success.main', my: 1 }}>
-                {Number(profile.safety_score || 0).toFixed(1)}%
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                {profile.full_name || user.username}
               </Typography>
-              <Typography color="textSecondary" variant="body2">
-                Safety Score
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                @{user.username} | {profile.designation || 'Worker'}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                <Button variant="contained" size="small" fullWidth>
-                  Edit
-                </Button>
-                <Button variant="outlined" size="small" fullWidth color="error">
-                  Deactivate
-                </Button>
+              <Chip
+                label={user.is_active ? 'Active Account' : 'Inactive Account'}
+                color={user.is_active ? 'success' : 'default'}
+                sx={{ mb: 2 }}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <Box sx={{ my: 1 }}>
+                <Typography variant="h3" sx={{ color: 'success.main', fontWeight: 800 }}>
+                  {Number(profile.safety_score || 100).toFixed(1)}%
+                </Typography>
+                <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 600 }}>
+                  Current Safety Score
+                </Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
+        {/* Right Column: Profile Details */}
         <Grid item xs={12} md={8}>
-          <Card>
+          <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Contact Information
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+                Personal & Contact Details
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Email />
-                  <Typography>{worker.email}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Phone />
-                  <Typography>{profile.phone_number || 'Not provided'}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <LocationOn />
-                  <Typography>{profile.mine_location || 'Not provided'}</Typography>
-                </Box>
-              </Box>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Employment Details
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={6}>
-                  <Typography color="textSecondary" variant="body2">
-                    Employee ID
-                  </Typography>
-                  <Typography>{profile.employee_id || 'N/A'}</Typography>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Email color="action" />
+                    <Box>
+                      <Typography variant="caption" color="textSecondary">Email Address</Typography>
+                      <Typography variant="body2">{user.email}</Typography>
+                    </Box>
+                  </Box>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography color="textSecondary" variant="body2">
-                    Department
-                  </Typography>
-                  <Typography>{profile.department || 'N/A'}</Typography>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Phone color="action" />
+                    <Box>
+                      <Typography variant="caption" color="textSecondary">Phone Number</Typography>
+                      <Typography variant="body2">{profile.phone_number || 'N/A'}</Typography>
+                    </Box>
+                  </Box>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography color="textSecondary" variant="body2">
-                    Join Date
-                  </Typography>
-                  <Typography>{profile.joining_date || 'N/A'}</Typography>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocationOn color="action" />
+                    <Box>
+                      <Typography variant="caption" color="textSecondary">Mine Sector / Location</Typography>
+                      <Typography variant="body2">{profile.mine_location || 'Zone 1'}</Typography>
+                    </Box>
+                  </Box>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography color="textSecondary" variant="body2">
-                    Designation
-                  </Typography>
-                  <Typography>{profile.designation || 'N/A'}</Typography>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Work color="action" />
+                    <Box>
+                      <Typography variant="caption" color="textSecondary">Department</Typography>
+                      <Typography variant="body2">{profile.department || 'Operations'}</Typography>
+                    </Box>
+                  </Box>
                 </Grid>
               </Grid>
 
               <Divider sx={{ my: 2 }} />
 
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Profile Highlights
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+                Emergency Contact Details
               </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip icon={<VerifiedUser />} label={profile.blood_group || 'N/A'} color="primary" variant="outlined" />
-                <Chip icon={<Work />} label={profile.department || 'N/A'} color="secondary" variant="outlined" />
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="textSecondary">Contact Name</Typography>
+                  <Typography variant="body2">{profile.emergency_contact_name || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="textSecondary">Contact Number</Typography>
+                  <Typography variant="body2">{profile.emergency_contact_number || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="textSecondary">Blood Group</Typography>
+                  <Typography variant="body2">{profile.blood_group || 'O+'}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="textSecondary">Medical Conditions</Typography>
+                  <Typography variant="body2">{profile.medical_conditions || 'None'}</Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Shift & Attendance History */}
+      <Grid container spacing={3} sx={{ mt: 1 }}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <History color="primary" />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  Recent Shift History
+                </Typography>
               </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Start Time</TableCell>
+                      <TableCell>Total Hours</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {shifts.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>{new Date(s.start_time).toLocaleString()}</TableCell>
+                        <TableCell>{s.total_hours ? `${s.total_hours} hrs` : 'Active'}</TableCell>
+                        <TableCell>
+                          <Chip label={s.attendance_status} size="small" color="primary" variant="outlined" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {shifts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">No recorded shifts</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Reported Hazards History */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <WarningAmber color="warning" />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  Reported Hazard Activity
+                </Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Hazard Type</TableCell>
+                      <TableCell>Severity</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {hazards.map((h) => (
+                      <TableRow key={h.id}>
+                        <TableCell>{h.hazard_type}</TableCell>
+                        <TableCell>
+                          <Chip label={h.severity} size="small" color={h.severity === 'critical' ? 'error' : 'warning'} />
+                        </TableCell>
+                        <TableCell>{h.status}</TableCell>
+                      </TableRow>
+                    ))}
+                    {hazards.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">No reported hazards</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </CardContent>
           </Card>
         </Grid>

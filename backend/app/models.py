@@ -25,7 +25,8 @@ class User(Base):
     checklists = relationship("PrecautionChecklist", back_populates="worker", cascade="all, delete-orphan")
     sos_alerts = relationship("SOSAlert", foreign_keys="SOSAlert.worker_id", back_populates="worker", cascade="all, delete-orphan")
     resolved_sos_alerts = relationship("SOSAlert", foreign_keys="SOSAlert.resolved_by", back_populates="resolver")
-    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", foreign_keys="Notification.user_id", back_populates="user", cascade="all, delete-orphan")
+    sent_notifications = relationship("Notification", foreign_keys="Notification.sender_id", back_populates="sender")
     created_reports = relationship("Report", back_populates="creator")
     audit_logs = relationship("AuditLog", back_populates="user")
     training_progress = relationship("TrainingProgress", back_populates="worker", cascade="all, delete-orphan")
@@ -191,14 +192,18 @@ class Notification(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     title = Column(String(100), nullable=False)
     message = Column(Text, nullable=False)
-    type = Column(String(50), default="safety_alert", nullable=False)  # 'safety_alert', 'hazard_warning', 'shift_reminder', 'emergency_instruction', 'sos_triggered'
+    type = Column(String(50), default="safety_alert", nullable=False)  # 'safety_alert', 'hazard_warning', 'shift_reminder', 'emergency_instruction', 'sos_triggered', 'announcement'
+    category = Column(String(50), default="General", nullable=False)
+    priority = Column(String(20), default="info", nullable=False)  # 'info', 'warning', 'critical', 'emergency'
     is_read = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     # Relationships
-    user = relationship("User", back_populates="notifications")
+    user = relationship("User", foreign_keys=[user_id], back_populates="notifications")
+    sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_notifications")
 
 
 class LeaveRequest(Base):
@@ -366,3 +371,14 @@ class HealthAssessment(Base):
 
     # Relationships
     worker = relationship("User", back_populates="health_assessments")
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    setting_key = Column(String(100), unique=True, index=True, nullable=False)
+    setting_value = Column(Text, nullable=False)
+    description = Column(String(255), nullable=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+

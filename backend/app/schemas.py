@@ -92,6 +92,31 @@ class UserOut(UserBase):
     class Config:
         from_attributes = True
 
+# --- Notification Schemas ---
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+    type: str = "safety_alert"
+    category: str = "Announcement"
+    priority: str = "info"
+    target_role: str = "all"
+    user_id: Optional[int] = None
+
+class NotificationOut(BaseModel):
+    id: int
+    user_id: int
+    sender_id: Optional[int] = None
+    title: str
+    message: str
+    type: str
+    category: str
+    priority: str
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # --- Shift Schemas ---
 class ShiftBase(BaseModel):
     start_time: datetime
@@ -259,17 +284,23 @@ class SOSAlertOut(SOSAlertBase):
 
 # --- Notification Schemas ---
 class NotificationCreate(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
     title: str
     message: str
     type: str = "safety_alert"
+    category: Optional[str] = "General"
+    priority: Optional[str] = "info"
+    target_role: Optional[str] = "all"
 
 class NotificationOut(BaseModel):
     id: int
     user_id: int
+    sender_id: Optional[int] = None
     title: str
     message: str
     type: str
+    category: Optional[str] = "General"
+    priority: Optional[str] = "info"
     is_read: bool
     created_at: datetime
 
@@ -484,3 +515,52 @@ class AIAnswer(BaseModel):
     answer: str
     category: str
     related_questions: List[str] = []
+
+# --- System Setting & Admin Schemas ---
+class SystemSettingBase(BaseModel):
+    setting_key: str
+    setting_value: str
+    description: Optional[str] = None
+
+class SystemSettingCreate(SystemSettingBase):
+    pass
+
+class SystemSettingOut(SystemSettingBase):
+    id: int
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class UserAdminCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    role: str = "worker"
+    is_active: bool = True
+    full_name: Optional[str] = None
+    department: Optional[str] = None
+    mine_location: Optional[str] = None
+    phone_number: Optional[str] = None
+    employee_id: Optional[str] = None
+    designation: Optional[str] = None
+    blood_group: Optional[str] = "O+"
+    age: Optional[int] = 30
+    gender: Optional[str] = "Male"
+    emergency_contact_name: Optional[str] = "N/A"
+    emergency_contact_number: Optional[str] = "0000000000"
+    address: Optional[str] = "Mining Zone 1"
+
+class UserAdminUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    full_name: Optional[str] = None
+    department: Optional[str] = None
+    mine_location: Optional[str] = None
+    phone_number: Optional[str] = None
+    designation: Optional[str] = None
+    blood_group: Optional[str] = None
+    medical_conditions: Optional[str] = None
+    safety_score: Optional[float] = None
+

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Box, Card, TextField, Button, Typography, Link, Container, Alert, FormControl, InputLabel, Select, MenuItem, Grid } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import apiClient from '../../api/client';
 
 export const Register = () => {
@@ -205,7 +205,7 @@ export const Register = () => {
 
           <Box sx={{ textAlign: 'center' }}>
             Already have an account?{' '}
-            <Link href="/login" underline="hover">
+            <Link component={RouterLink} to="/login" underline="hover">
               Login
             </Link>
           </Box>

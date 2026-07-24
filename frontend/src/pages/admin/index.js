@@ -5,4 +5,6 @@ export { LiveMap } from './LiveMap';
 export { Hazards } from './Hazards';
 export { SOSCenter } from './SOSCenter';
 export { Reports } from './Reports';
+export { Notifications } from './Notifications';
+export { UserManagement } from './UserManagement';
 export { Settings } from './Settings';

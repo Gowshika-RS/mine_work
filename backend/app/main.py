@@ -37,7 +37,26 @@ def ensure_supervisor_user():
         db.close()
 
 
+def ensure_admin_user():
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username == "admin").first()
+        if not existing:
+            admin_user = User(
+                username="admin",
+                email="admin@minesafety.com",
+                hashed_password=get_password_hash("admin123"),
+                role="admin",
+                is_active=True,
+            )
+            db.add(admin_user)
+            db.commit()
+    finally:
+        db.close()
+
+
 ensure_supervisor_user()
+ensure_admin_user()
 
 # Set up Rate Limiter
 limiter = Limiter(key_func=get_remote_address)

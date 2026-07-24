@@ -81,9 +81,12 @@ async def broadcast_notification(
     for worker in workers:
         notif = Notification(
             user_id=worker.id,
+            sender_id=admin.id,
             title=payload.title,
             message=payload.message,
-            type=payload.type
+            type=payload.type,
+            category=payload.category or "Announcement",
+            priority=payload.priority or ("critical" if payload.type == "emergency_instruction" else "info"),
         )
         db.add(notif)
 
@@ -95,11 +98,35 @@ async def broadcast_notification(
         "title": payload.title,
         "message": payload.message,
         "notification_type": payload.type,
+        "category": payload.category or "Announcement",
+        "priority": payload.priority or "info",
     }
     await manager.broadcast_to_role(ws_payload, "worker")
 
     log_audit(db, admin.id, "NOTIFICATION_BROADCAST", f"Title: {payload.title}")
     return {"message": f"Notification broadcast to {len(workers)} workers"}
+
+
+@router.delete("/{notif_id}")
+def delete_notification(
+    notif_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_any_role)
+):
+    query = db.query(Notification).filter(Notification.id == notif_id)
+    if user.role != "admin":
+        query = query.filter(Notification.user_id == user.id)
+    notif = query.first()
+    
+    if not notif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found"
+        )
+        
+    db.delete(notif)
+    db.commit()
+    return {"message": "Notification deleted successfully"}
 
 
 @router.post("/weather-alert")

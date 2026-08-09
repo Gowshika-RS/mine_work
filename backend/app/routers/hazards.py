@@ -25,23 +25,41 @@ async def report_hazard(
         severity=hazard_in.severity,
         description=hazard_in.description,
         location=hazard_in.location,
+        audio_url=hazard_in.audio_url,
         status="open"
     )
     db.add(new_report)
     db.commit()
     db.refresh(new_report)
     
-    # Broadcast hazard report via WebSocket to all admins
+    reporter_name = reporter.profile.full_name if reporter.profile else reporter.username
+
+    # Create notification record in DB for historical tracking
+    db_notif = Notification(
+        user_id=reporter.id,
+        title=f"HAZARD REPORTED: {new_report.hazard_type}",
+        message=f"{reporter_name} reported a {new_report.severity} severity hazard at {new_report.location}.",
+        type="hazard_warning",
+        category="Hazard",
+        priority=new_report.severity
+    )
+    db.add(db_notif)
+    db.commit()
+    
+    # Broadcast hazard report via WebSocket to ALL Admins AND Supervisors immediately
     hazard_payload = {
         "type": "new_hazard",
         "id": new_report.id,
         "hazard_type": new_report.hazard_type,
         "severity": new_report.severity,
         "location": new_report.location,
-        "reporter": reporter.username,
+        "description": new_report.description,
+        "reporter": reporter_name,
+        "audio_url": new_report.audio_url,
         "timestamp": now.strftime("%Y-%m-%d %H:%M:%S")
     }
     await manager.broadcast_to_role(hazard_payload, "admin")
+    await manager.broadcast_to_role(hazard_payload, "supervisor")
     
     log_audit(db, reporter.id, "HAZARD_REPORTED", f"Hazard ID: {new_report.id}, Type: {new_report.hazard_type}")
     return new_report
@@ -60,13 +78,6 @@ def upload_hazard_image(
             detail="Hazard report not found"
         )
         
-    # Check permission
-    if user.role != "admin" and hazard.reporter_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to modify this report"
-        )
-        
     file_path = save_uploaded_file(file)
     new_image = HazardImage(
         hazard_report_id=hazard_id,
@@ -78,13 +89,35 @@ def upload_hazard_image(
     log_audit(db, user.id, "HAZARD_IMAGE_UPLOADED", f"Hazard ID: {hazard_id}, Image URL: {file_path}")
     return {"message": "Image uploaded successfully", "url": file_path}
 
+@router.post("/{hazard_id}/upload-audio")
+def upload_hazard_audio(
+    hazard_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user)
+):
+    hazard = db.query(HazardReport).filter(HazardReport.id == hazard_id).first()
+    if not hazard:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Hazard report not found"
+        )
+        
+    file_path = save_uploaded_file(file)
+    hazard.audio_url = file_path
+    db.commit()
+    db.refresh(hazard)
+    
+    log_audit(db, user.id, "HAZARD_AUDIO_UPLOADED", f"Hazard ID: {hazard_id}, Audio URL: {file_path}")
+    return {"message": "Voice message uploaded successfully", "audio_url": file_path}
+
 @router.get("/", response_model=List[HazardReportOut])
 def list_hazards(
     db: Session = Depends(get_db),
     user: User = Depends(require_any_role)
 ):
-    if user.role == "admin":
-        # Admin can view all
+    if user.role in ["admin", "supervisor"]:
+        # Admins & Supervisors can view ALL reported worker hazards
         return db.query(HazardReport).order_by(HazardReport.created_at.desc()).all()
     else:
         # Worker views what they reported

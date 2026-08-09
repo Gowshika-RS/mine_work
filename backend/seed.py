@@ -52,7 +52,8 @@ def seed_db():
                 "department": "Excavation",
                 "mine_location": "Shaft 3",
                 "designation": "Drill Operator",
-                "safety_score": Decimal("98.50")
+                "safety_score": Decimal("98.50"),
+                "face_photo_url": "/static/face_profiles/john_doe.jpg"
             },
             {
                 "username": "jane_smith",
@@ -71,7 +72,8 @@ def seed_db():
                 "department": "Operations",
                 "mine_location": "Shaft 1",
                 "designation": "Haul Truck Driver",
-                "safety_score": Decimal("95.00")
+                "safety_score": Decimal("95.00"),
+                "face_photo_url": "/static/face_profiles/jane_smith.jpg"
             },
             {
                 "username": "bob_johnson",
@@ -90,7 +92,8 @@ def seed_db():
                 "department": "Ventilation",
                 "mine_location": "Tunnel B",
                 "designation": "Ventilation Technician",
-                "safety_score": Decimal("68.00") # Low score to trigger alerts
+                "safety_score": Decimal("68.00"), # Low score to trigger alerts
+                "face_photo_url": "/static/face_profiles/bob_johnson.jpg"
             }
         ]
         
@@ -125,7 +128,8 @@ def seed_db():
                     mine_location=w["mine_location"],
                     designation=w["designation"],
                     joining_date=date.today(),
-                    safety_score=w["safety_score"]
+                    safety_score=w["safety_score"],
+                    face_photo_url=w["face_photo_url"]
                 )
                 db.add(profile)
                 
@@ -138,7 +142,31 @@ def seed_db():
                 db.add(score_log)
                 db.commit()
             else:
-                print(f"Worker {w['username']} already exists.")
+                print(f"Worker {w['username']} already exists. Updating face_photo_url...")
+                if user.profile:
+                    user.profile.face_photo_url = w["face_photo_url"]
+                else:
+                    profile = WorkerProfile(
+                        user_id=user.id,
+                        employee_id=w["employee_id"],
+                        full_name=w["full_name"],
+                        age=w["age"],
+                        gender=w["gender"],
+                        phone_number=w["phone_number"],
+                        emergency_contact_name=w["emergency_contact_name"],
+                        emergency_contact_number=w["emergency_contact_number"],
+                        address=w["address"],
+                        blood_group=w["blood_group"],
+                        medical_conditions=w["medical_conditions"],
+                        department=w["department"],
+                        mine_location=w["mine_location"],
+                        designation=w["designation"],
+                        joining_date=date.today(),
+                        safety_score=w["safety_score"],
+                        face_photo_url=w["face_photo_url"]
+                    )
+                    db.add(profile)
+                db.commit()
 
         # 3. Seed Mine Zones
         zones_data = [

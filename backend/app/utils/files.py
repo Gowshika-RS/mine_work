@@ -3,7 +3,10 @@ import uuid
 from fastapi import UploadFile, HTTPException
 from ..config import settings
 
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".webp",
+    ".webm", ".wav", ".mp3", ".m4a", ".ogg", ".3gp"
+}
 
 def save_uploaded_file(file: UploadFile) -> str:
     # Extract file extension and validate

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -14,9 +14,19 @@ import {
   Select,
   MenuItem,
   IconButton,
-  Chip
+  Chip,
+  Stack,
+  Paper
 } from '@mui/material';
-import { PhotoCamera, AutoAwesome, Warning } from '@mui/icons-material';
+import {
+  PhotoCamera,
+  AutoAwesome,
+  Warning,
+  Mic,
+  Stop,
+  Delete,
+  VolumeUp
+} from '@mui/icons-material';
 import apiClient from '../api/client';
 import { addToSyncQueue } from '../utils/offlineSync';
 
@@ -35,8 +45,38 @@ export const HazardReporter = ({ onSuccess }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState('');
+
   const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    // Acquire current GPS location for context
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+          const data = await res.json();
+          const place = data.locality || data.city || data.principalSubdivision;
+          if (place) {
+            setFormData(prev => ({ ...prev, location: `${place} (${latitude.toFixed(4)}, ${longitude.toFixed(4)})` }));
+          } else {
+            setFormData(prev => ({ ...prev, location: `GPS Zone (${latitude.toFixed(4)}, ${longitude.toFixed(4)})` }));
+          }
+        } catch {
+          setFormData(prev => ({ ...prev, location: `GPS Zone (${latitude.toFixed(4)}, ${longitude.toFixed(4)})` }));
+        }
+      });
+    }
+  }, []);
 
   const hazardTypes = [
     'Gas Leak',
@@ -77,6 +117,56 @@ export const HazardReporter = ({ onSuccess }) => {
     }
   };
 
+  // Voice message recording logic
+  const startRecording = async () => {
+    setError('');
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+        const url = URL.createObjectURL(audioBlob);
+        setAudioPreviewUrl(url);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Microphone access error:", err);
+      setError("Microphone access denied or unavailable. Please enable microphone permissions.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const clearAudio = () => {
+    setAudioBlob(null);
+    setAudioPreviewUrl('');
+    setRecordingTime(0);
+  };
+
   const handleAIAnalyze = async () => {
     if (!imageFile) {
       setError('Please select an image to analyze.');
@@ -89,7 +179,7 @@ export const HazardReporter = ({ onSuccess }) => {
 
     setAnalyzing(true);
     setError('');
-    
+
     try {
       const data = new FormData();
       data.append('file', imageFile);
@@ -98,20 +188,18 @@ export const HazardReporter = ({ onSuccess }) => {
       const response = await apiClient.post('/ai/hazard-detect', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       const aiData = response.data.ai_analysis;
       setAiAnalysis(aiData);
-      
-      // Auto-fill form from AI
+
       setFormData(prev => ({
         ...prev,
         hazard_type: hazardTypes.includes(aiData.hazard_type) ? aiData.hazard_type : 'Other',
         severity: aiData.severity || 'medium',
         description: aiData.description || prev.description,
       }));
-      
-      setSuccess('AI Analysis complete. Please review the details before submitting.');
 
+      setSuccess('AI Analysis complete. Please review the details before submitting.');
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.detail || 'Failed to analyze image with AI.');
@@ -131,8 +219,8 @@ export const HazardReporter = ({ onSuccess }) => {
       setLoading(false);
       return;
     }
-    if (!formData.description.trim()) {
-      setError('Please provide a description');
+    if (!formData.description.trim() && !audioBlob) {
+      setError('Please provide a text description or voice message');
       setLoading(false);
       return;
     }
@@ -143,51 +231,48 @@ export const HazardReporter = ({ onSuccess }) => {
     }
 
     try {
-      if (aiAnalysis && imageFile) {
-        // If AI analyzed, it actually saved it to DB already in our backend logic!
-        // So we just show success. (In a real scenario we'd separate the steps, but for this demo it's fine).
-        setSuccess('Hazard reported and analyzed successfully!');
-        if (onSuccess) onSuccess();
-      } else {
-        // Manual report
-        const token = localStorage.getItem('token');
-        
-        // Handle offline scenario manually or let axios throw
-        if (!navigator.onLine) {
-          await addToSyncQueue({
-            method: 'POST',
-            url: '/hazards/report',
-            data: formData,
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setSuccess('You are offline. Hazard report queued for sync.');
-        } else {
-          const response = await apiClient.post('/hazards/report', formData);
-          setSuccess('Hazard reported successfully!');
-          if (onSuccess) onSuccess(response.data);
-        }
+      const reportDesc = formData.description.trim() || "Voice note recorded by worker.";
+      const payload = {
+        hazard_type: formData.hazard_type,
+        severity: formData.severity,
+        description: reportDesc,
+        location: formData.location,
+      };
+
+      // 1. Submit main hazard report
+      const res = await apiClient.post('/hazards/report', payload);
+      const hazardId = res.data.id;
+
+      // 2. Upload image if attached
+      if (imageFile) {
+        const imgData = new FormData();
+        imgData.append('file', imageFile);
+        await apiClient.post(`/hazards/${hazardId}/upload`, imgData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       }
+
+      // 3. Upload voice recording if attached
+      if (audioBlob) {
+        const audioData = new FormData();
+        audioData.append('file', audioBlob, 'hazard_voice_note.webm');
+        await apiClient.post(`/hazards/${hazardId}/upload-audio`, audioData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      setSuccess('🚨 Hazard reported successfully! Alert broadcasted to Supervisors & Admin.');
+      if (onSuccess) onSuccess(res.data);
 
       // Reset form
       setFormData({ hazard_type: '', severity: 'medium', description: '', location: '' });
       setImageFile(null);
       setImagePreview('');
       setAiAnalysis(null);
-      
+      clearAudio();
     } catch (err) {
+      console.error("Hazard submit error:", err);
       setError(err.response?.data?.detail || 'Failed to report hazard. Please try again.');
-      
-      // Queue if network error
-      if (!err.response) {
-        await addToSyncQueue({
-          method: 'POST',
-          url: '/hazards/report',
-          data: formData,
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        setSuccess('Network error. Hazard report queued for offline sync.');
-        setError('');
-      }
     } finally {
       setLoading(false);
     }
@@ -196,8 +281,11 @@ export const HazardReporter = ({ onSuccess }) => {
   return (
     <Card sx={{ mt: 2, mb: 4, borderRadius: 3, boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
       <CardContent>
-        <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Warning color="error" /> Report Hazard
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+          <Warning color="error" /> Report Safety Hazard
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+          Reports are dispatched in real-time to both Supervisor Dashboard and Admin Control Room via WebSockets.
         </Typography>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -207,12 +295,15 @@ export const HazardReporter = ({ onSuccess }) => {
           <Grid container spacing={3}>
             {/* Image Upload Area */}
             <Grid item xs={12}>
-              <Box 
-                sx={{ 
-                  border: '2px dashed', 
-                  borderColor: 'divider', 
-                  borderRadius: 2, 
-                  p: 3, 
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                📷 Hazard Photo (Optional)
+              </Typography>
+              <Box
+                sx={{
+                  border: '2px dashed',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  p: 2.5,
                   textAlign: 'center',
                   bgcolor: 'background.default'
                 }}
@@ -225,20 +316,21 @@ export const HazardReporter = ({ onSuccess }) => {
                   onChange={handleImageChange}
                   ref={fileInputRef}
                 />
-                
+
                 {imagePreview ? (
                   <Box>
-                    <img src={imagePreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }} />
-                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center', gap: 2 }}>
-                      <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>
+                    <img src={imagePreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '8px' }} />
+                    <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                      <Button variant="outlined" size="small" onClick={() => fileInputRef.current?.click()}>
                         Change Image
                       </Button>
-                      <Button 
-                        variant="contained" 
+                      <Button
+                        variant="contained"
+                        size="small"
                         color="secondary"
                         onClick={handleAIAnalyze}
                         disabled={analyzing}
-                        startIcon={analyzing ? <CircularProgress size={20} /> : <AutoAwesome />}
+                        startIcon={analyzing ? <CircularProgress size={16} /> : <AutoAwesome />}
                       >
                         Analyze with AI
                       </Button>
@@ -246,30 +338,70 @@ export const HazardReporter = ({ onSuccess }) => {
                   </Box>
                 ) : (
                   <label htmlFor="icon-button-file">
-                    <Button variant="outlined" component="span" startIcon={<PhotoCamera />} sx={{ p: 2 }}>
-                      Capture / Upload Hazard Image
+                    <Button variant="outlined" component="span" startIcon={<PhotoCamera />} sx={{ p: 1.5 }}>
+                      Capture / Upload Photo
                     </Button>
                   </label>
                 )}
               </Box>
             </Grid>
 
+            {/* Voice Message Recorder Section */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <VolumeUp color="primary" /> Voice Note Message (Optional)
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#fbfbfb' }}>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  {!isRecording && !audioPreviewUrl && (
+                    <Button
+                      variant="contained"
+                      color="error"
+                      startIcon={<Mic />}
+                      onClick={startRecording}
+                      sx={{ borderRadius: 3, fontWeight: 'bold' }}
+                    >
+                      Record Voice Note
+                    </Button>
+                  )}
+
+                  {isRecording && (
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      startIcon={<Stop />}
+                      onClick={stopRecording}
+                      sx={{ borderRadius: 3, fontWeight: 'bold', animation: 'pulse 1s infinite' }}
+                    >
+                      Stop Recording ({recordingTime}s)
+                    </Button>
+                  )}
+
+                  {audioPreviewUrl && (
+                    <Box display="flex" alignItems="center" gap={2} width="100%" flexWrap="wrap">
+                      <audio controls src={audioPreviewUrl} style={{ height: '38px', flexGrow: 1 }} />
+                      <IconButton color="error" onClick={clearAudio} title="Delete Voice Note">
+                        <Delete />
+                      </IconButton>
+                    </Box>
+                  )}
+                </Stack>
+              </Paper>
+            </Grid>
+
             {/* AI Analysis Results */}
             {aiAnalysis && (
               <Grid item xs={12}>
                 <Alert severity="info" icon={<AutoAwesome />} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
-                  <Typography variant="subtitle1" fontWeight="bold">AI Analysis Complete</Typography>
-                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Typography variant="subtitle1" fontWeight="bold">AI Inspection Summary</Typography>
+                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2"><strong>Risk Level:</strong> <Chip size="small" label={aiAnalysis.risk_level} color="warning" /></Typography>
-                      <Typography variant="body2" sx={{ mt: 1 }}><strong>Required PPE:</strong> {aiAnalysis.required_ppe}</Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}><strong>Required PPE:</strong> {aiAnalysis.required_ppe}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2"><strong>Immediate Actions:</strong> {aiAnalysis.immediate_actions}</Typography>
-                      <Typography variant="body2" sx={{ mt: 1 }}><strong>Notify:</strong> {aiAnalysis.notify_who}</Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography variant="body2"><strong>Precautions:</strong> {aiAnalysis.precautions}</Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}><strong>Notify:</strong> {aiAnalysis.notify_who}</Typography>
                     </Grid>
                   </Grid>
                 </Alert>
@@ -279,22 +411,22 @@ export const HazardReporter = ({ onSuccess }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Location"
+                label="Location / Zone"
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
                 required
-                helperText="Specify exact zone or level"
+                helperText="Specify exact shaft or mine section"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth required>
-                <InputLabel>Severity</InputLabel>
+                <InputLabel>Severity Level</InputLabel>
                 <Select
                   name="severity"
                   value={formData.severity}
                   onChange={handleChange}
-                  label="Severity"
+                  label="Severity Level"
                 >
                   {severityLevels.map((lvl) => (
                     <MenuItem key={lvl.value} value={lvl.value}>
@@ -306,12 +438,12 @@ export const HazardReporter = ({ onSuccess }) => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth required>
-                <InputLabel>Hazard Type</InputLabel>
+                <InputLabel>Hazard Category</InputLabel>
                 <Select
                   name="hazard_type"
                   value={formData.hazard_type}
                   onChange={handleChange}
-                  label="Hazard Type"
+                  label="Hazard Category"
                 >
                   {hazardTypes.map((type) => (
                     <MenuItem key={type} value={type}>
@@ -324,11 +456,11 @@ export const HazardReporter = ({ onSuccess }) => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Description"
+                label="Hazard Description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                required
+                placeholder="Describe the hazard or leave blank if voice note is recorded"
                 multiline
                 rows={3}
               />
@@ -337,12 +469,13 @@ export const HazardReporter = ({ onSuccess }) => {
               <Button
                 type="submit"
                 variant="contained"
-                color="primary"
+                color="error"
                 fullWidth
                 size="large"
-                disabled={loading}
+                disabled={loading || isRecording}
+                sx={{ py: 1.5, fontWeight: 'bold', fontSize: '1.1rem', borderRadius: 2 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Submit Hazard Report'}
+                {loading ? <CircularProgress size={24} color="inherit" /> : 'SUBMIT HAZARD REPORT'}
               </Button>
             </Grid>
           </Grid>

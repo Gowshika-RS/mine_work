@@ -289,3 +289,121 @@ def get_attendance_summary(
         "workers": worker_details
     }
 
+
+# --- Real-Time Shift Monitoring & Cumulative Hours ---
+
+@router.get("/monitoring")
+def get_shift_monitoring_status(
+    db: Session = Depends(get_db),
+    worker: User = Depends(require_worker)
+):
+    """Get real-time shift monitoring timers, break time, remaining shift, overtime, and cumulative hours."""
+    today = date.today()
+    active_shift = db.query(Shift).filter(
+        Shift.worker_id == worker.id,
+        Shift.end_time == None
+    ).first()
+
+    now = datetime.now()
+    is_clocked_in = active_shift is not None
+
+    if is_clocked_in:
+        elapsed = int((now - active_shift.start_time).total_seconds())
+        start_iso = active_shift.start_time.isoformat()
+    else:
+        elapsed = 0
+        start_iso = None
+
+    shift_limit = 8 * 3600  # 8 hours standard
+    remaining = max(0, shift_limit - elapsed)
+    overtime = max(0, elapsed - shift_limit)
+    progress_pct = min(100.0, round((elapsed / shift_limit) * 100, 1))
+
+    # Calculate cumulative hours (daily, weekly, monthly)
+    from datetime import timedelta
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    all_shifts = db.query(Shift).filter(Shift.worker_id == worker.id).all()
+
+    daily_hrs = sum(float(s.total_hours or 0) for s in all_shifts if s.start_time.date() == today)
+    if is_clocked_in:
+        daily_hrs += round(elapsed / 3600.0, 2)
+
+    weekly_hrs = sum(float(s.total_hours or 0) for s in all_shifts if s.start_time.date() >= week_start)
+    if is_clocked_in:
+        weekly_hrs += round(elapsed / 3600.0, 2)
+
+    monthly_hrs = sum(float(s.total_hours or 0) for s in all_shifts if s.start_time.date() >= month_start)
+    if is_clocked_in:
+        monthly_hrs += round(elapsed / 3600.0, 2)
+
+    # Notifications & Alerts logic
+    alerts = []
+    if elapsed > 10 * 3600:
+        alerts.append("🔴 CRITICAL: Exceeded safe working hours (10+ hrs)! Mandatory shift end required.")
+    elif elapsed > 8 * 3600:
+        alerts.append("🟠 OVERTIME: Shift limit of 8 hours exceeded. Overtime tracking activated.")
+    elif elapsed > 7.5 * 3600:
+        alerts.append("🟡 SHIFT ENDING SOON: 30 minutes remaining in standard shift.")
+    elif elapsed > 4 * 3600:
+        alerts.append("☕ BREAK REMINDER: You have worked 4+ hours. Take a mandatory rest break.")
+
+    return {
+        "is_clocked_in": is_clocked_in,
+        "shift_start_time": start_iso,
+        "current_time": now.isoformat(),
+        "seconds_elapsed": elapsed,
+        "break_seconds": 15 * 60,  # 15 mins default recorded break
+        "remaining_seconds": remaining,
+        "overtime_seconds": overtime,
+        "progress_percent": progress_pct,
+        "daily_hours": round(daily_hrs, 2),
+        "weekly_hours": round(weekly_hrs, 2),
+        "monthly_hours": round(monthly_hrs, 2),
+        "alerts": alerts
+    }
+
+
+@router.get("/supervisor-summary")
+def get_supervisor_shift_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_any_role)
+):
+    """Returns worker shift summaries for supervisors and admins."""
+    today = date.today()
+    workers = db.query(User).filter(User.role == "worker").all()
+
+    summaries = []
+    for w in workers:
+        active_shift = db.query(Shift).filter(
+            Shift.worker_id == w.id,
+            Shift.end_time == None
+        ).first()
+
+        completed_today = db.query(Shift).filter(
+            Shift.worker_id == w.id,
+            Shift.start_time >= datetime.combine(today, time.min)
+        ).all()
+
+        today_hours = sum(float(s.total_hours or 0) for s in completed_today)
+
+        summaries.append({
+            "worker_id": w.id,
+            "username": w.username,
+            "full_name": w.profile.full_name if w.profile else w.username,
+            "department": w.profile.department if w.profile else "General Mine",
+            "is_on_shift": active_shift is not None,
+            "shift_start": active_shift.start_time.isoformat() if active_shift else None,
+            "today_total_hours": round(today_hours, 2),
+            "status": "Active On Duty" if active_shift else "Off Duty"
+        })
+
+    return {
+        "success": True,
+        "count": len(summaries),
+        "active_on_shift": sum(1 for s in summaries if s["is_on_shift"]),
+        "workers": summaries
+    }
+
+

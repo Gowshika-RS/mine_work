@@ -93,4 +93,6 @@ class RoleChecker:
 # Predefined role dependencies
 require_admin = RoleChecker(["admin"])
 require_worker = RoleChecker(["worker"])
+require_supervisor_or_admin = RoleChecker(["admin", "supervisor"])
 require_any_role = RoleChecker(["admin", "worker", "supervisor"])
+

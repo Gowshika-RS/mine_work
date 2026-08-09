@@ -58,6 +58,7 @@ class WorkerProfile(Base):
     designation = Column(String(100), nullable=False)
     joining_date = Column(Date, nullable=False)
     safety_score = Column(Numeric(5, 2), default=100.00, nullable=False)
+    face_photo_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -106,6 +107,7 @@ class HazardReport(Base):
     status = Column(String(20), default="open", nullable=False)  # 'open', 'under_review', 'resolved'
     investigator_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     remarks = Column(Text, nullable=True)
+    audio_url = Column(String(255), nullable=True)
     
     # AI Hazard Detection Fields
     risk_level = Column(String(50), nullable=True)
@@ -177,6 +179,7 @@ class SOSAlert(Base):
     latitude = Column(Numeric(10, 8), nullable=False)
     longitude = Column(Numeric(11, 8), nullable=False)
     alert_type = Column(String(50), default="SOS_TRIGGERED", nullable=False)
+    emergency_type = Column(String(50), default="General Emergency", nullable=False)
     status = Column(String(20), default="active", nullable=False)  # 'active', 'acknowledged', 'dispatched', 'resolved'
     timestamp = Column(DateTime, default=func.now(), nullable=False)
     resolved_at = Column(DateTime, nullable=True)
@@ -343,15 +346,68 @@ class Message(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sender_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     receiver_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    group_target = Column(String(50), nullable=True)  # 'all', 'workers', 'admins', None for direct
+    group_target = Column(String(50), nullable=True)  # 'all', 'workers', 'admins', 'supervisors'
     message_type = Column(String(30), default="direct", nullable=False)  # 'direct', 'announcement', 'emergency'
     content = Column(Text, nullable=False)
+    media_url = Column(String(500), nullable=True)
+    media_type = Column(String(20), default="text", nullable=False)  # 'text', 'image', 'document', 'voice'
+    reply_to_id = Column(Integer, nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    delivered_status = Column(String(20), default="sent", nullable=False)  # 'sent', 'delivered', 'seen'
     is_read = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     # Relationships
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
+
+
+class Attendance(Base):
+    __tablename__ = "attendances"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    check_in_time = Column(DateTime, nullable=False)
+    check_out_time = Column(DateTime, nullable=True)
+    latitude = Column(Numeric(10, 8), nullable=True)
+    longitude = Column(Numeric(11, 8), nullable=True)
+    photo_url = Column(String(500), nullable=True)
+    status = Column(String(20), default="present", nullable=False)  # 'present', 'late', 'absent'
+    face_verified = Column(Boolean, default=True, nullable=False)
+    confidence_score = Column(Numeric(5, 2), default=98.50, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    worker = relationship("User", foreign_keys=[worker_id])
+
+
+class UserGamification(Base):
+    __tablename__ = "user_gamification"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    current_streak = Column(Integer, default=0, nullable=False)
+    longest_streak = Column(Integer, default=0, nullable=False)
+    xp = Column(Integer, default=0, nullable=False)
+    level = Column(Integer, default=1, nullable=False)
+    last_checkin_date = Column(Date, nullable=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    worker = relationship("User", foreign_keys=[worker_id])
+
+
+class UserBadge(Base):
+    __tablename__ = "user_badges"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    badge_key = Column(String(50), nullable=False)
+    badge_name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    icon = Column(String(100), nullable=True)
+    unlocked_at = Column(DateTime, default=func.now(), nullable=False)
+
+    worker = relationship("User", foreign_keys=[worker_id])
 
 
 class HealthAssessment(Base):
@@ -381,4 +437,84 @@ class SystemSetting(Base):
     setting_value = Column(Text, nullable=False)
     description = Column(String(255), nullable=True)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class PPERecord(Base):
+    __tablename__ = "ppe_records"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    passed = Column(Boolean, default=False, nullable=False)
+    helmet = Column(Boolean, default=False, nullable=False)
+    vest = Column(Boolean, default=False, nullable=False)
+    mask = Column(Boolean, default=False, nullable=False)
+    goggles = Column(Boolean, default=False, nullable=False)
+    missing_equipment = Column(JSON, nullable=True)
+    confidence_score = Column(Numeric(5, 2), default=95.00, nullable=False)
+    image_path = Column(String(500), nullable=True)
+    timestamp = Column(DateTime, default=func.now(), nullable=False)
+
+    worker = relationship("User", foreign_keys=[worker_id])
+
+
+class EquipmentIssueReport(Base):
+    __tablename__ = "equipment_issue_reports"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    equipment_type = Column(String(100), nullable=False)
+    equipment_id = Column(String(50), nullable=False)
+    location = Column(String(255), nullable=False)
+    priority = Column(String(20), default="Medium", nullable=False) # 'Low', 'Medium', 'High', 'Critical'
+    description = Column(Text, nullable=False)
+    photo_url = Column(String(500), nullable=True)
+    voice_url = Column(String(500), nullable=True)
+    status = Column(String(30), default="Submitted", nullable=False) # 'Submitted', 'Under Review', 'In Progress', 'Resolved', 'Rejected'
+    assigned_to = Column(String(100), default="Maintenance Crew", nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    worker = relationship("User", foreign_keys=[worker_id])
+
+
+class ShiftHandover(Base):
+    __tablename__ = "shift_handovers"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    supervisor_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    shift_name = Column(String(50), nullable=False) # 'Morning', 'Afternoon', 'Night'
+    handover_date = Column(String(20), nullable=False)
+    workers_on_shift = Column(Integer, default=0, nullable=False)
+    open_hazards_count = Column(Integer, default=0, nullable=False)
+    open_equipment_count = Column(Integer, default=0, nullable=False)
+    open_incidents_count = Column(Integer, default=0, nullable=False)
+    safety_concerns = Column(Text, nullable=True)
+    important_notes = Column(Text, nullable=False)
+    pending_tasks = Column(Text, nullable=True)
+    next_shift_recommendations = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    supervisor = relationship("User", foreign_keys=[supervisor_id])
+
+
+class SupervisorTask(Base):
+    __tablename__ = "supervisor_tasks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    supervisor_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    worker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    zone = Column(String(100), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    priority = Column(String(20), default="Medium", nullable=False) # 'Low', 'Medium', 'High', 'Critical'
+    deadline = Column(String(50), nullable=False)
+    status = Column(String(30), default="Pending", nullable=False) # 'Pending', 'In Progress', 'Completed', 'Overdue'
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    supervisor = relationship("User", foreign_keys=[supervisor_id])
+    worker = relationship("User", foreign_keys=[worker_id])
+
+
+
 

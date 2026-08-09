@@ -166,7 +166,15 @@ from .routers import (
     training,
     health,
     ai_assistant,
+    supervisor,
     admin,
+    attendance,
+    gamification,
+    weather,
+    ai_hazard,
+    equipment,
+    incidents,
+    ppe,
 )
 
 # --------------------------------------------------
@@ -218,6 +226,11 @@ app.add_middleware(
 # --------------------------------------------------
 
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOAD_DIR, "hazards"), exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOAD_DIR, "attendance"), exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOAD_DIR, "chat"), exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOAD_DIR, "ppe"), exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOAD_DIR, "equipment"), exist_ok=True)
 
 app.mount(
     "/static",
@@ -237,6 +250,8 @@ app.include_router(locations.router, prefix="/api")
 app.include_router(hazards.router, prefix="/api")
 app.include_router(safety.router, prefix="/api")
 app.include_router(sos.router, prefix="/api")
+app.include_router(sos.emergency_router, prefix="/api")
+
 app.include_router(notifications.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(ml.router, prefix="/api")
@@ -247,6 +262,15 @@ app.include_router(health.router, prefix="/api")
 app.include_router(ai_assistant.router, prefix="/api")
 app.include_router(supervisor.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(attendance.router, prefix="/api")
+app.include_router(gamification.router, prefix="/api")
+app.include_router(weather.router, prefix="/api")
+app.include_router(ai_hazard.router, prefix="/api")
+app.include_router(equipment.router, prefix="/api")
+app.include_router(incidents.router, prefix="/api")
+app.include_router(ppe.router, prefix="/api")
+
+
 
 # --------------------------------------------------
 # Root Endpoint
@@ -305,9 +329,36 @@ async def websocket_endpoint(
                             }
                         )
                     )
-
             except Exception:
                 pass
 
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, role)
+
+
+@app.websocket("/ws/chat/{room_id}")
+async def websocket_chat_room(
+    websocket: WebSocket,
+    room_id: str,
+    token: str = Query(...)
+):
+    connection_details = await manager.connect(websocket, token)
+    if not connection_details:
+        return
+
+    user_id, role = connection_details
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                msg_json = json.loads(data)
+                if msg_json.get("type") == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+                else:
+                    msg_json["room_id"] = room_id
+                    await manager.broadcast_to_role(msg_json, role)
+            except Exception:
+                pass
     except WebSocketDisconnect:
         manager.disconnect(user_id, role)

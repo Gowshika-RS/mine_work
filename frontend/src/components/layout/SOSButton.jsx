@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Fab, CircularProgress, Box, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import { Sos } from '@mui/icons-material';
+import apiClient from '../../api/client';
 
 export const SOSButton = ({ userRole }) => {
   const [isPressing, setIsPressing] = useState(false);
@@ -15,7 +16,6 @@ export const SOSButton = ({ userRole }) => {
   if (userRole !== 'worker') return null;
 
   const startPress = (e) => {
-    // Prevent default context menu on long press for touch devices
     if (e.type === 'touchstart') e.preventDefault();
     
     setIsPressing(true);
@@ -40,11 +40,33 @@ export const SOSButton = ({ userRole }) => {
     if (intervalTimer.current) clearInterval(intervalTimer.current);
   };
 
-  const activateSos = () => {
+  const activateSos = async () => {
     endPress();
     setIsSosActive(true);
-    // In a real app, we would send API requests here with geolocation, sensor data, etc.
     if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
+
+    try {
+      let lat = 12.9716;
+      let lon = 77.5946;
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+          });
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        } catch (err) {}
+      }
+
+      await apiClient.post('/emergency/sos', {
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lon),
+        alert_type: "SOS_TRIGGERED",
+        emergency_type: "General Emergency"
+      });
+    } catch (err) {
+      console.error("Floating SOS trigger API error:", err);
+    }
   };
 
   const handleClose = () => {

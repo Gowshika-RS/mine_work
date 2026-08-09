@@ -7,26 +7,22 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Always fallback cleanly to local SQLite database if MySQL URL is not explicitly configured and reachable
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    DATABASE_URL = "mysql+pymysql://root:rootpassword@localhost:3306/mine_safety"
 
 def create_db_engine():
-    connect_args = {}
-    if "sqlite" in DATABASE_URL:
-        connect_args["check_same_thread"] = False
-        return create_engine(DATABASE_URL, connect_args=connect_args)
-    
-    try:
-        eng = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
-        # Test connection
-        conn = eng.connect()
-        conn.close()
-        return eng
-    except Exception as e:
-        print(f"[Database Warning] Could not connect to primary database ({DATABASE_URL}). Falling back to SQLite for offline execution. Error: {e}")
-        fallback_url = "sqlite:///./mine_safety.db"
-        return create_engine(fallback_url, connect_args={"check_same_thread": False})
+    if DATABASE_URL and "mysql" in DATABASE_URL:
+        try:
+            eng = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"connect_timeout": 1})
+            conn = eng.connect()
+            conn.close()
+            return eng
+        except Exception:
+            print("[Database System] MySQL server unreachable on port 3306. Switching to local SQLite database (mine_safety.db).")
+
+    # Default to fast local SQLite database
+    sqlite_url = "sqlite:///./mine_safety.db"
+    return create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
 engine = create_db_engine()
 

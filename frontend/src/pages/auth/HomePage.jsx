@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { Security, Engineering, AdminPanelSettings } from '@mui/icons-material';
+import { LanguageSelector } from '../../components/LanguageSelector';
 
 export const HomePage = () => {
   const { t, i18n } = useTranslation();
@@ -70,29 +71,9 @@ export const HomePage = () => {
         </Typography>
         
         <Stack direction="row" spacing={3} alignItems="center">
-          <Select
-            value={i18n.language}
-            onChange={handleLanguageChange}
-            variant="standard"
-            sx={{ 
-              color: '#fff',
-              '& .MuiSvgIcon-root': { color: '#fff' },
-              '&:before': { borderBottom: '1px solid rgba(255,255,255,0.5)' },
-              '&:hover:not(.Mui-disabled, .Mui-error):before': { borderBottom: '1px solid #fff' },
-            }}
-          >
-            <MenuItem value="en">English</MenuItem>
-            <MenuItem value="hi">हिंदी (Hindi)</MenuItem>
-            <MenuItem value="ta">தமிழ் (Tamil)</MenuItem>
-            <MenuItem value="te">తెలుగు (Telugu)</MenuItem>
-            <MenuItem value="kn">ಕನ್ನಡ (Kannada)</MenuItem>
-            <MenuItem value="ml">മലയാളം (Malayalam)</MenuItem>
-            <MenuItem value="mr">मराठी (Marathi)</MenuItem>
-            <MenuItem value="bn">বাংলা (Bengali)</MenuItem>
-            <MenuItem value="gu">ગુજરાતી (Gujarati)</MenuItem>
-            <MenuItem value="pa">ਪੰਜਾਬੀ (Punjabi)</MenuItem>
-            <MenuItem value="or">ଓଡ଼ିଆ (Odia)</MenuItem>
-          </Select>
+          <Box sx={{ width: 180 }}>
+            <LanguageSelector size="small" showLabel={false} />
+          </Box>
           <Button 
             component={RouterLink} 
             to="/login" 

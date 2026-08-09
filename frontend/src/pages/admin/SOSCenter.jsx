@@ -171,9 +171,17 @@ export const SOSCenter = () => {
                 }}
               >
                 <TableCell>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    {alert.worker_name}
-                  </Typography>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      {alert.worker_name?.includes('(') ? alert.worker_name : `${alert.worker_name} (${(alert.worker_role || 'worker').charAt(0).toUpperCase() + (alert.worker_role || 'worker').slice(1)})`}
+                    </Typography>
+                    <Chip
+                      label={(alert.worker_role || 'worker').toUpperCase()}
+                      size="small"
+                      color={alert.worker_role === 'admin' ? 'error' : alert.worker_role === 'supervisor' ? 'warning' : 'primary'}
+                      sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }}
+                    />
+                  </Box>
                   <Typography variant="caption" color="textSecondary">
                     ID: {alert.employee_id}
                   </Typography>

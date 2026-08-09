@@ -54,6 +54,7 @@ class WorkerProfileBase(BaseModel):
     mine_location: str
     designation: str
     joining_date: date
+    face_photo_url: Optional[str] = None
 
 class WorkerProfileCreate(WorkerProfileBase):
     pass
@@ -72,11 +73,13 @@ class WorkerProfileUpdate(BaseModel):
     mine_location: Optional[str] = None
     designation: Optional[str] = None
     joining_date: Optional[date] = None
+    face_photo_url: Optional[str] = None
 
 class WorkerProfileOut(WorkerProfileBase):
     id: int
     user_id: int
     safety_score: Decimal
+    face_photo_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -204,6 +207,7 @@ class HazardReportBase(BaseModel):
     severity: str
     description: str
     location: str
+    audio_url: Optional[str] = None
     # AI Fields
     risk_level: Optional[str] = None
     precautions: Optional[str] = None
@@ -262,6 +266,7 @@ class SOSAlertBase(BaseModel):
     latitude: Decimal
     longitude: Decimal
     alert_type: str = "SOS_TRIGGERED"
+    emergency_type: str = "General Emergency"
 
 class SOSAlertCreate(SOSAlertBase):
     pass
@@ -274,6 +279,11 @@ class SOSAlertUpdate(BaseModel):
 class SOSAlertOut(SOSAlertBase):
     id: int
     worker_id: int
+    worker_name: Optional[str] = None
+    worker_role: Optional[str] = "worker"
+    employee_id: Optional[str] = None
+    department: Optional[str] = None
+    emergency_type: str
     status: str
     timestamp: datetime
     resolved_at: Optional[datetime] = None
@@ -281,6 +291,7 @@ class SOSAlertOut(SOSAlertBase):
 
     class Config:
         from_attributes = True
+
 
 # --- Notification Schemas ---
 class NotificationCreate(BaseModel):
@@ -409,22 +420,35 @@ class TrainingProgressOut(BaseModel):
 # --- Message Schemas ---
 class MessageCreate(BaseModel):
     receiver_id: Optional[int] = None
-    group_target: Optional[str] = None  # 'all', 'workers', 'admins'
+    group_target: Optional[str] = None  # 'all', 'workers', 'admins', 'supervisors'
     message_type: str = "direct"  # 'direct', 'announcement', 'emergency'
     content: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = "text"  # 'text', 'image', 'document', 'voice'
+    reply_to_id: Optional[int] = None
 
 class MessageOut(BaseModel):
     id: int
     sender_id: Optional[int] = None
+    sender_name: Optional[str] = None
+    sender_role: Optional[str] = None
     receiver_id: Optional[int] = None
+    receiver_name: Optional[str] = None
+    receiver_role: Optional[str] = None
     group_target: Optional[str] = None
     message_type: str
     content: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = "text"
+    reply_to_id: Optional[int] = None
+    is_deleted: bool = False
+    delivered_status: str = "sent"
     is_read: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
+
 
 # --- Health Assessment Schemas ---
 class HealthAssessmentCreate(BaseModel):
@@ -562,5 +586,116 @@ class UserAdminUpdate(BaseModel):
     designation: Optional[str] = None
     blood_group: Optional[str] = None
     medical_conditions: Optional[str] = None
+
+
+# --- Attendance Schemas ---
+class AttendanceCheckIn(BaseModel):
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+    photo_base64: Optional[str] = None
+
+class AttendanceOut(BaseModel):
+    id: int
+    worker_id: int
+    date: date
+    check_in_time: datetime
+    check_out_time: Optional[datetime] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+    photo_url: Optional[str] = None
+    status: str
+    face_verified: bool
+    confidence_score: Optional[Decimal] = None
+
+    class Config:
+        from_attributes = True
+
+# --- Gamification Schemas ---
+class UserBadgeOut(BaseModel):
+    id: int
+    badge_key: str
+    badge_name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    unlocked_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class UserGamificationOut(BaseModel):
+    current_streak: int
+    longest_streak: int
+    xp: int
+    level: int
+    last_checkin_date: Optional[date] = None
+    badges: List[UserBadgeOut] = []
+
+    class Config:
+        from_attributes = True
+
+# --- Weather Schemas ---
+class WeatherOut(BaseModel):
+    temperature: float
+    humidity: float
+    wind_speed: float
+    rain_probability: float
+    pressure: float
+    condition: str
+    icon: str
+    sunrise: str
+    sunset: str
+    air_quality_index: int
+    location_name: str
+    warnings: List[str] = []
+
     safety_score: Optional[float] = None
+
+
+# --- PPE Detection Schemas ---
+class PPERecordOut(BaseModel):
+    id: int
+    worker_id: int
+    passed: bool
+    helmet: bool
+    vest: bool
+    mask: bool
+    goggles: bool
+    missing_equipment: Optional[List[str]] = []
+    confidence_score: float
+    image_path: Optional[str] = None
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Equipment Issue Report Schemas ---
+class EquipmentIssueReportCreate(BaseModel):
+    equipment_type: str
+    equipment_id: Optional[str] = None
+    location: str
+    priority: str = "Medium"
+    description: str
+    photo_base64: Optional[str] = None
+    voice_base64: Optional[str] = None
+
+
+class EquipmentIssueReportOut(BaseModel):
+    id: int
+    worker_id: int
+    equipment_type: str
+    equipment_id: str
+    location: str
+    priority: str
+    description: str
+    photo_url: Optional[str] = None
+    voice_url: Optional[str] = None
+    status: str
+    assigned_to: Optional[str] = "Maintenance Crew"
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 

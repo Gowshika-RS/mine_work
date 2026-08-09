@@ -79,7 +79,6 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
           ? '/supervisor/dashboard'
           : '/worker/dashboard';
 
-      setLoading(false);
       navigate(targetPath, { replace: true });
     } catch (err) {
       console.error('Login error:', err);
@@ -91,6 +90,7 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
       );
     }
   };
+
 
   return (
     <Container maxWidth="sm">

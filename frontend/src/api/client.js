@@ -1,10 +1,7 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8000/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: 'http://127.0.0.1:8000/api',
 });
 
 apiClient.interceptors.request.use(
@@ -23,12 +20,6 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If unauthorized (token expired/invalid), we can optionally clear token
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Redirect to login if appropriate (optional, can be handled by app state)
-    }
     return Promise.reject(error);
   }
 );

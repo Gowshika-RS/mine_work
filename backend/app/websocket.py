@@ -13,6 +13,7 @@ class ConnectionManager:
         # role_connections maps role -> Set of user_ids
         self.role_connections: Dict[str, Set[int]] = {
             "admin": set(),
+            "supervisor": set(),
             "worker": set()
         }
 
@@ -22,7 +23,7 @@ class ConnectionManager:
             # Decode token to authenticate WebSocket connection
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             username = payload.get("sub")
-            role = payload.get("role")
+            role = payload.get("role", "worker")
             
             db = SessionLocal()
             user = db.query(User).filter(User.username == username).first()
@@ -36,6 +37,8 @@ class ConnectionManager:
             
             # Save connection
             self.active_connections[user_id] = websocket
+            if role not in self.role_connections:
+                self.role_connections[role] = set()
             self.role_connections[role].add(user_id)
             
             print(f"WebSocket connected: User {username} (ID: {user_id}, Role: {role})")
@@ -45,6 +48,7 @@ class ConnectionManager:
             print(f"WebSocket authentication error: {e}")
             await websocket.close(code=4002)  # Unauthorized
             return None
+
 
     def disconnect(self, user_id: int, role: str):
         if user_id in self.active_connections:

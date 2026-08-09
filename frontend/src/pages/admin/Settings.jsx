@@ -19,6 +19,7 @@ import {
   Snackbar,
 } from '@mui/material';
 import apiClient from '../../api/client';
+import { LanguageSelector } from '../../components/LanguageSelector';
 
 export const Settings = () => {
   const [settings, setSettings] = useState({
@@ -131,19 +132,12 @@ export const Settings = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Default Language</InputLabel>
-                <Select
-                  name="language"
-                  value={settings.language || 'en'}
-                  onChange={handleChange}
-                  label="Default Language"
-                >
-                  <MenuItem value="en">English (US)</MenuItem>
-                  <MenuItem value="es">Spanish (Español)</MenuItem>
-                  <MenuItem value="hi">Hindi (हिन्दी)</MenuItem>
-                </Select>
-              </FormControl>
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mb: 0.5 }}>
+                  INTERFACE LANGUAGE
+                </Typography>
+                <LanguageSelector size="small" showLabel={false} />
+              </Box>
             </Grid>
           </Grid>
 

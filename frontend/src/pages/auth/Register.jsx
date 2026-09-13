@@ -23,7 +23,7 @@ export const Register = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const selectedRole = params.get('role');
-    if (selectedRole && ['worker', 'supervisor', 'admin'].includes(selectedRole)) {
+    if (selectedRole && ['worker', 'supervisor', 'admin', 'emergency_officer'].includes(selectedRole)) {
       setFormData((prev) => ({ ...prev, role: selectedRole }));
     }
   }, [location.search]);
@@ -135,8 +135,10 @@ export const Register = () => {
                 onChange={handleChange}
                 label="Role"
               >
-                <MenuItem value="worker">Worker</MenuItem>
-                <MenuItem value="admin">Admin</MenuItem>
+                <MenuItem value="worker">Mine Worker</MenuItem>
+                <MenuItem value="supervisor">Site Supervisor</MenuItem>
+                <MenuItem value="emergency_officer">Emergency Officer</MenuItem>
+                <MenuItem value="admin">Administrator</MenuItem>
               </Select>
             </FormControl>
 

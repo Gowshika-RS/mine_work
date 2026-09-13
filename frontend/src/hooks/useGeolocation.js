@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../api/client';
 
-// Dhanbad Mine coordinates as realistic mining center
+// Default mine center (used ONLY if user denies browser location permission)
 const MINE_LAT = 23.8103;
 const MINE_LON = 86.4126;
 
@@ -11,11 +11,10 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
   const [loading, setLoading] = useState(false);
   const [isSimulated, setIsSimulated] = useState(false);
 
-  // Helper to generate simulated coordinate near Dhanbad mine
+  // Helper to generate simulated coordinate if GPS permission is denied
   const getSimulatedLocation = (prevLoc) => {
     const baseLat = prevLoc ? prevLoc.latitude : MINE_LAT;
     const baseLon = prevLoc ? prevLoc.longitude : MINE_LON;
-    // Walk randomly: very small step sizes
     const offsetLat = (Math.random() - 0.5) * 0.0005;
     const offsetLon = (Math.random() - 0.5) * 0.0005;
     return {
@@ -29,13 +28,14 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
   const getCurrentLocation = () => {
     setLoading(true);
     if (!navigator.geolocation) {
-      setError('Geolocation not supported. Starting simulation...');
+      setError('Geolocation not supported by this browser.');
       setLocation(getSimulatedLocation(null));
       setIsSimulated(true);
       setLoading(false);
       return;
     }
 
+    // Try standard accuracy first (fast & reliable on Windows/Mac desktops via IP/Wi-Fi)
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -45,17 +45,36 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
         setLoading(false);
       },
       (err) => {
-        console.warn('GPS failed, starting simulation: ', err.message);
-        setError(`GPS Unavailable (${err.message}). Simulating movement near Mine Site.`);
-        setLocation(getSimulatedLocation(null));
-        setIsSimulated(true);
-        setLoading(false);
+        console.warn('First GPS attempt failed, retrying fallback:', err.message);
+        // Fallback attempt with relaxed constraints
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setLocation({ latitude, longitude, timestamp: new Date(), isSimulated: false });
+            setError(null);
+            setIsSimulated(false);
+            setLoading(false);
+          },
+          (err2) => {
+            console.warn('GPS unavailable or permission denied:', err2.message);
+            setError('Browser location access blocked or unavailable. Click "Allow" in browser location bar.');
+            setLocation(getSimulatedLocation(null));
+            setIsSimulated(true);
+            setLoading(false);
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
     );
   };
 
-  // Watch position continuously or simulate if active
+  // Request real location immediately on mount
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  // Watch position continuously
   useEffect(() => {
     if (!trackingEnabled) return;
 
@@ -76,9 +95,9 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
           setIsSimulated(false);
         },
         (err) => {
-          console.warn('Watch Position failed, switching to Simulation:', err.message);
+          console.warn('Watch Position failed:', err.message);
           setIsSimulated(true);
-          setError(`Simulation mode active: GPS permission denied or unavailable.`);
+          setError('Browser location access blocked or unavailable.');
           if (!location) {
             setLocation(getSimulatedLocation(null));
           }
@@ -86,7 +105,7 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
             setLocation(prev => getSimulatedLocation(prev));
           }, updateInterval);
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
       );
     }
 
@@ -100,27 +119,25 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
   useEffect(() => {
     if (!trackingEnabled || !location) return;
 
+    let authFailed = false;
+
     const sendLocation = async () => {
+      if (authFailed) return;
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        await axios.post(
-          'http://localhost:8000/api/locations/',
-          {
-            latitude: location.latitude,
-            longitude: location.longitude,
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await apiClient.post('/locations/', {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
       } catch (err) {
-        console.error('Failed to send location:', err);
+        if (err.response && err.response.status === 401) {
+          authFailed = true;
+        }
       }
     };
 
-    // Send immediately
     sendLocation();
-
-    // Then send periodically
     const interval = setInterval(sendLocation, updateInterval);
     return () => clearInterval(interval);
   }, [trackingEnabled, location, updateInterval]);
@@ -133,3 +150,5 @@ export const useGeolocation = (trackingEnabled = false, updateInterval = 10000) 
     isSimulated
   };
 };
+
+export default useGeolocation;

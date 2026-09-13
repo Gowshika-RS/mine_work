@@ -20,6 +20,9 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response && error.response.status === 401) {
+      console.warn('API returned 401 Unauthorized: token may be expired or invalid.');
+    }
     return Promise.reject(error);
   }
 );

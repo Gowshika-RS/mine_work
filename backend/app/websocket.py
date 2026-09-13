@@ -1,6 +1,7 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List, Set
 from jose import jwt
+from sqlalchemy import func
 from .config import settings
 from .database import SessionLocal
 from .models import User
@@ -26,7 +27,7 @@ class ConnectionManager:
             role = payload.get("role", "worker")
             
             db = SessionLocal()
-            user = db.query(User).filter(User.username == username).first()
+            user = db.query(User).filter(func.lower(User.username) == func.lower(username)).first()
             db.close()
             
             if not user:

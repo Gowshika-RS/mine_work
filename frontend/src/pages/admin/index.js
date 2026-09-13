@@ -19,3 +19,5 @@ export { default as MineZonesGeofencing } from './MineZonesGeofencing';
 export { default as EnvironmentMonitoring } from './EnvironmentMonitoring';
 export { default as CommunicationCenter } from './CommunicationCenter';
 export { default as Analytics } from './Analytics';
+export { AdminLeave } from './AdminLeave';
+

@@ -23,7 +23,7 @@ def seed_db():
             admin = User(
                 username="admin",
                 email="admin@minesafety.com",
-                hashed_password=get_password_hash("adminpassword"),
+                hashed_password=get_password_hash("admin123"),
                 role="admin",
                 is_active=True
             )

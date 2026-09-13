@@ -140,6 +140,7 @@ export const UserManagement = () => {
       case 'supervisor':
         return 'warning';
       case 'emergency':
+      case 'emergency_officer':
         return 'info';
       default:
         return 'primary';
@@ -207,7 +208,7 @@ export const UserManagement = () => {
                 <MenuItem value="all">All Roles</MenuItem>
                 <MenuItem value="worker">Mine Worker</MenuItem>
                 <MenuItem value="supervisor">Site Supervisor</MenuItem>
-                <MenuItem value="emergency">Emergency Personnel</MenuItem>
+                <MenuItem value="emergency_officer">Emergency Officer</MenuItem>
                 <MenuItem value="admin">System Admin</MenuItem>
               </Select>
             </FormControl>
@@ -341,7 +342,7 @@ export const UserManagement = () => {
             >
               <MenuItem value="worker">Mine Worker</MenuItem>
               <MenuItem value="supervisor">Site Supervisor</MenuItem>
-              <MenuItem value="emergency">Emergency Personnel</MenuItem>
+              <MenuItem value="emergency_officer">Emergency Officer</MenuItem>
               <MenuItem value="admin">System Admin</MenuItem>
             </Select>
           </FormControl>

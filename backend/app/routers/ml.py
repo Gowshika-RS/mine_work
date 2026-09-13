@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import numpy as np
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -22,6 +23,7 @@ class PredictionOutput(BaseModel):
     risk_status: str
     probability: float
     recommendation: str
+    class_probabilities: Optional[dict] = None
 
 # Helper to load the model on demand
 def get_model():
@@ -73,6 +75,16 @@ def get_recommendations_and_status(risk_level: int, methane: float, co: float, t
         status = "Safe"
         return status, "All parameters normal. Continue standard operations with regular PPE checks."
 
+def extract_class_probabilities(probabilities_array) -> dict:
+    safe_p = float(probabilities_array[0]) * 100 if len(probabilities_array) > 0 else 90.0
+    warn_p = float(probabilities_array[1]) * 100 if len(probabilities_array) > 1 else 8.0
+    crit_p = float(probabilities_array[2]) * 100 if len(probabilities_array) > 2 else 2.0
+    return {
+        "safe": round(safe_p, 1),
+        "warning": round(warn_p, 1),
+        "critical": round(crit_p, 1)
+    }
+
 @router.post("/predict", response_model=PredictionOutput)
 def predict_hazard_risk(payload: PredictionInput):
     model = get_model()
@@ -90,6 +102,7 @@ def predict_hazard_risk(payload: PredictionInput):
         risk_level = int(model.predict(features)[0])
         probabilities = model.predict_proba(features)[0]
         max_prob = float(probabilities[risk_level])
+        class_probs = extract_class_probabilities(probabilities)
         
         status_str, recommendation = get_recommendations_and_status(
             risk_level, 
@@ -103,7 +116,8 @@ def predict_hazard_risk(payload: PredictionInput):
             "risk_level": risk_level,
             "risk_status": status_str,
             "probability": max_prob,
-            "recommendation": recommendation
+            "recommendation": recommendation,
+            "class_probabilities": class_probs
         }
     except Exception as e:
         raise HTTPException(
@@ -139,6 +153,7 @@ def get_realtime_telemetry():
         risk_level = int(model.predict(features)[0])
         probabilities = model.predict_proba(features)[0]
         max_prob = float(probabilities[risk_level])
+        class_probs = extract_class_probabilities(probabilities)
 
         status_str, recommendation = get_recommendations_and_status(
             risk_level, methane, co, temp, air_velocity
@@ -163,6 +178,7 @@ def get_realtime_telemetry():
                 "risk_status": status_str,
                 "probability": round(max_prob * 100, 1),
                 "recommendation": recommendation,
+                "class_probabilities": class_probs
             },
         }
     except Exception as e:

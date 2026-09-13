@@ -94,5 +94,8 @@ class RoleChecker:
 require_admin = RoleChecker(["admin"])
 require_worker = RoleChecker(["worker"])
 require_supervisor_or_admin = RoleChecker(["admin", "supervisor"])
-require_any_role = RoleChecker(["admin", "worker", "supervisor"])
+require_emergency_officer = RoleChecker(["admin", "emergency_officer"])
+require_emergency_handler = RoleChecker(["admin", "supervisor", "emergency_officer"])
+require_any_role = RoleChecker(["admin", "worker", "supervisor", "emergency_officer"])
+
 

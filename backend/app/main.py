@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from .database import engine, Base, get_db, SessionLocal
 from .config import settings
 from .websocket import manager
-from .routers import auth, users, workers, shifts, locations, hazards, safety, sos, notifications, reports, supervisor, ai_hazard
+from .routers import auth, users, workers, shifts, locations, hazards, safety, sos, notifications, reports, supervisor, ai_hazard, leave, emergency
 from .models import MineZone, User
 from .auth.security import get_password_hash
 
@@ -55,8 +55,27 @@ def ensure_admin_user():
         db.close()
 
 
+def ensure_emergency_officer_user():
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username == "emergency_officer").first()
+        if not existing:
+            officer_user = User(
+                username="emergency_officer",
+                email="emergency@minesafety.com",
+                hashed_password=get_password_hash("emergency123"),
+                role="emergency_officer",
+                is_active=True,
+            )
+            db.add(officer_user)
+            db.commit()
+    finally:
+        db.close()
+
+
 ensure_supervisor_user()
 ensure_admin_user()
+ensure_emergency_officer_user()
 
 # Set up Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -175,6 +194,7 @@ from .routers import (
     equipment,
     incidents,
     ppe,
+    emergency,
 )
 
 # --------------------------------------------------
@@ -269,6 +289,8 @@ app.include_router(ai_hazard.router, prefix="/api")
 app.include_router(equipment.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
 app.include_router(ppe.router, prefix="/api")
+app.include_router(emergency.router, prefix="/api")
+app.include_router(leave.router, prefix="/api")
 
 
 
@@ -300,6 +322,7 @@ async def health_check():
 # --------------------------------------------------
 
 @app.websocket("/ws")
+@app.websocket("/api/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
     token: str = Query(...)

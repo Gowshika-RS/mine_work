@@ -93,10 +93,10 @@ export const SupervisorEmergencyCenter = () => {
                   </Box>
                   <Typography variant="caption" color="text.secondary">{a.employee_id}</Typography>
                 </TableCell>
-                <TableCell>{a.mine_area} ({a.latitude}, {a.longitude})</TableCell>
+                <TableCell>{a.mine_area || 'Shaft 2 Level'} ({a.latitude}, {a.longitude})</TableCell>
                 <TableCell>{a.timestamp}</TableCell>
-                <TableCell><Chip label={a.alert_type} size="small" color="error" /></TableCell>
-                <TableCell><Chip label={a.severity.toUpperCase()} size="small" color="error" sx={{ fontWeight: 700 }} /></TableCell>
+                <TableCell><Chip label={a.alert_type || 'SOS_TRIGGERED'} size="small" color="error" /></TableCell>
+                <TableCell><Chip label={(a.severity || 'critical').toUpperCase()} size="small" color="error" sx={{ fontWeight: 700 }} /></TableCell>
                 <TableCell>
                   <Chip
                     label={a.status.toUpperCase()}

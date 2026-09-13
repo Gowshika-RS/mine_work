@@ -11,9 +11,9 @@ import LandscapeIcon from '@mui/icons-material/Landscape';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
+import CancelIcon from '@mui/icons-material/Cancel';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/client';
-
 import { useSocket } from '../../context/SocketContext';
 
 const EMERGENCY_TYPES = [
@@ -26,91 +26,140 @@ const EMERGENCY_TYPES = [
 ];
 
 export const SOSPage = () => {
+  const { t } = useTranslation();
   const [selectedType, setSelectedType] = useState('General Emergency');
   const [loading, setLoading] = useState(false);
+  const [resolveLoading, setResolveLoading] = useState(false);
   const [gpsLocation, setGpsLocation] = useState({ lat: 12.9716, lon: 77.5946 });
   const [activeSOS, setActiveSOS] = useState(null);
-  const [sosHistory, setSosHistory] = useState([]);
   const [message, setMessage] = useState('');
+  const [severity, setSeverity] = useState('info');
 
   const { socket } = useSocket();
 
   useEffect(() => {
-    // Acquire GPS
+    // Acquire GPS position
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setGpsLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        (err) => console.log("GPS fetch error, using default mine coordinates:", err)
+        (err) => console.log("GPS fetch info, using mine site defaults:", err)
       );
     }
 
     fetchSOSState();
   }, []);
 
+  // Listen to real-time WebSocket status updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSocketMessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'sos_status_change' && activeSOS && data.id === activeSOS.id) {
+          setActiveSOS(prev => prev ? { ...prev, status: data.status } : null);
+          setMessage(`ℹ️ Emergency status updated to: ${data.status.toUpperCase()}`);
+          setSeverity(data.status === 'resolved' ? 'success' : 'warning');
+        }
+      } catch (e) {
+        console.error("Failed parsing WS message in SOSPage:", e);
+      }
+    };
+
+    socket.addEventListener('message', handleSocketMessage);
+    return () => {
+      socket.removeEventListener('message', handleSocketMessage);
+    };
+  }, [socket, activeSOS]);
+
   const fetchSOSState = async () => {
     try {
       const res = await apiClient.get('/sos/active');
-      if (res.data && res.data.length > 0) {
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         setActiveSOS(res.data[0]);
+      } else {
+        setActiveSOS(null);
       }
     } catch (e) {
-      console.log("Error fetching SOS active state:", e);
+      console.log("Error fetching active SOS state:", e);
     }
   };
 
   const handleTriggerSOS = async () => {
     setLoading(true);
     setMessage('');
+    
+    const payload = {
+      latitude: parseFloat(gpsLocation.lat || 12.9716),
+      longitude: parseFloat(gpsLocation.lon || 77.5946),
+      alert_type: "SOS_TRIGGERED",
+      emergency_type: selectedType || "General Emergency"
+    };
+
     try {
-      const payload = {
-        latitude: parseFloat(gpsLocation.lat || 12.9716),
-        longitude: parseFloat(gpsLocation.lon || 77.5946),
-        alert_type: "SOS_TRIGGERED",
-        emergency_type: selectedType || "General Emergency"
-      };
-
-
-      const res = await apiClient.post('/emergency/sos', payload);
+      let res;
+      try {
+        res = await apiClient.post('/emergency/sos', payload);
+      } catch (err1) {
+        // Fallback to /sos/trigger
+        res = await apiClient.post('/sos/trigger', payload);
+      }
 
       setActiveSOS(res.data);
-      setMessage("SOS sent successfully");
-    } catch (err) {
-      console.error("SOS Trigger failed:", err);
-      if (!err.response) {
-        setMessage("Unable to connect to server. Please try again.");
-      } else {
-        const detail = err.response?.data?.detail;
-        let errorMsg = "An error occurred while sending SOS alert.";
-        if (typeof detail === 'string') {
-          errorMsg = detail;
-        } else if (Array.isArray(detail)) {
-          errorMsg = detail.map((d) => d.msg || JSON.stringify(d)).join(', ');
-        } else if (err.message) {
-          errorMsg = err.message;
-        }
-        setMessage(`Failed to trigger SOS: ${errorMsg}`);
+      setMessage("🚨 SOS Emergency Distress Beacon Dispatched to Control Room & Supervisors!");
+      setSeverity('error');
+
+      if (navigator.vibrate) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
       }
+    } catch (err) {
+      console.error("SOS Trigger error:", err);
+      const detail = err.response?.data?.detail;
+      let errorMsg = "An error occurred while transmitting SOS alert.";
+      if (typeof detail === 'string') {
+        errorMsg = detail;
+      } else if (Array.isArray(detail)) {
+        errorMsg = detail.map((d) => d.msg || JSON.stringify(d)).join(', ');
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setMessage(`Failed to trigger SOS: ${errorMsg}`);
+      setSeverity('error');
     } finally {
       setLoading(false);
     }
   };
 
-
-
+  const handleResolveSOS = async () => {
+    if (!activeSOS) return;
+    setResolveLoading(true);
+    try {
+      const res = await apiClient.put(`/sos/${activeSOS.id}/status`, { status: 'resolved' });
+      setActiveSOS(null);
+      setMessage("✅ Emergency status resolved and distress beacon deactivated.");
+      setSeverity('success');
+    } catch (err) {
+      console.error("Failed to deactivate SOS:", err);
+      setMessage("Could not update SOS status. Please contact supervisor directly.");
+      setSeverity('warning');
+    } finally {
+      setResolveLoading(false);
+    }
+  };
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography variant="h3" fontWeight="bold" color="error.main" gutterBottom>
-          🚨 {t('sos.title')}
+        <Typography variant="h3" fontWeight="900" color="error.main" gutterBottom>
+          🚨 {t('sos.title') || 'EMERGENCY SOS CENTER'}
         </Typography>
-        <Typography variant="subtitle1" color="text.secondary">
-          {t('sos.subtitle')}
+        <Typography variant="subtitle1" color="text.secondary" fontWeight="500">
+          {t('sos.subtitle') || 'Instant underground distress beacon with GPS locking & Control Room dispatch.'}
         </Typography>
       </Box>
 
       {message && (
-        <Alert severity={activeSOS ? "error" : "info"} sx={{ mb: 3, fontWeight: 'bold' }}>
+        <Alert severity={severity} sx={{ mb: 3, fontWeight: 'bold', borderRadius: 3 }}>
           {message}
         </Alert>
       )}
@@ -122,33 +171,45 @@ export const SOSPage = () => {
             <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
               <Box>
                 <Typography variant="h5" fontWeight="bold" color="error">
-                  Active Emergency Beacon #{activeSOS.id}
+                  🚨 Active Distress Beacon #{activeSOS.id}
                 </Typography>
                 <Typography variant="subtitle2" fontWeight="bold" color="text.primary" sx={{ mt: 0.5 }}>
-                  Triggered by: {activeSOS.worker_name ? (activeSOS.worker_name.includes('(') ? activeSOS.worker_name : `${activeSOS.worker_name} (${(activeSOS.worker_role || 'worker').charAt(0).toUpperCase() + (activeSOS.worker_role || 'worker').slice(1)})`) : 'Current User (Worker)'}
+                  Triggered by: {activeSOS.worker_name || 'Worker'}
                 </Typography>
                 <Typography variant="body1" sx={{ mt: 1 }}>
-                  Type: <strong>{activeSOS.emergency_type}</strong> | Location: <strong>({activeSOS.latitude}, {activeSOS.longitude})</strong>
+                  Emergency Type: <strong>{activeSOS.emergency_type}</strong> | GPS: <strong>({activeSOS.latitude}, {activeSOS.longitude})</strong>
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Triggered at: {activeSOS.timestamp}
+                  Trigger Time: {activeSOS.timestamp}
                 </Typography>
               </Box>
 
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1.5} alignItems="center">
                 <Chip
                   icon={activeSOS.status === 'resolved' ? <CheckCircleIcon /> : <AccessTimeIcon />}
-                  label={`STATUS: ${activeSOS.status.toUpperCase()}`}
+                  label={`STATUS: ${(activeSOS.status || 'ACTIVE').toUpperCase()}`}
                   color={activeSOS.status === 'resolved' ? 'success' : activeSOS.status === 'acknowledged' ? 'warning' : 'error'}
                   sx={{ fontSize: '1rem', py: 2.5, px: 2, fontWeight: 'bold' }}
                 />
+
+                <Button
+                  variant="outlined"
+                  color="success"
+                  size="small"
+                  disabled={resolveLoading}
+                  startIcon={resolveLoading ? <CircularProgress size={16} /> : <CancelIcon />}
+                  onClick={handleResolveSOS}
+                  sx={{ fontWeight: 'bold', borderRadius: 2 }}
+                >
+                  Clear SOS
+                </Button>
               </Stack>
             </Box>
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="body2" color="text.secondary">
-              救援团队和监督员已收到警报 (Rescue operations dispatched). Keep your location device active.
+            <Typography variant="body2" color="text.secondary" fontWeight="500">
+              救援团队和监督员已收到警报 (Rescue operations notified). Control room telemetry connection is active.
             </Typography>
           </CardContent>
         </Card>
@@ -159,7 +220,7 @@ export const SOSPage = () => {
         <Grid item xs={12} md={7}>
           <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3 }}>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
-              1. Select Emergency Type
+              1. Select Emergency Category
             </Typography>
 
             <Grid container spacing={2} sx={{ my: 1 }}>
@@ -191,13 +252,13 @@ export const SOSPage = () => {
             <Divider sx={{ my: 3 }} />
 
             <Typography variant="h6" fontWeight="bold" gutterBottom>
-              2. GPS Coordinate Lock
+              2. Real-Time Geolocation Lock
             </Typography>
 
             <Box display="flex" alignItems="center" gap={1} sx={{ color: 'text.secondary', mb: 3 }}>
               <MyLocationIcon color="primary" />
               <Typography variant="body2">
-                Latitude: <strong>{gpsLocation.lat.toFixed(6)}</strong> | Longitude: <strong>{gpsLocation.lon.toFixed(6)}</strong> (Real GPS Lock)
+                Latitude: <strong>{Number(gpsLocation.lat).toFixed(6)}</strong> | Longitude: <strong>{Number(gpsLocation.lon).toFixed(6)}</strong> (GPS Lock)
               </Typography>
             </Box>
 
@@ -222,13 +283,13 @@ export const SOSPage = () => {
                   }
                 }}
               >
-                {loading ? <CircularProgress color="inherit" /> : `ACTIVATE SOS ALERT`}
+                {loading ? <CircularProgress color="inherit" size={32} /> : `ACTIVATE SOS ALERT`}
               </Button>
             </Box>
           </Paper>
         </Grid>
 
-        {/* Right Panel: Emergency Instructions & Protocol */}
+        {/* Right Panel: Emergency Protocol */}
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, bgcolor: '#fafafa' }}>
             <Typography variant="h6" fontWeight="bold" color="error.main" gutterBottom>
@@ -264,3 +325,5 @@ export const SOSPage = () => {
     </Container>
   );
 };
+
+export default SOSPage;

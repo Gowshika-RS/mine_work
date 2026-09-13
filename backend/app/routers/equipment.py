@@ -3,52 +3,56 @@ import uuid
 import base64
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..models import EquipmentIssueReport, User, Notification
-from ..schemas import EquipmentIssueReportOut, EquipmentIssueReportCreate
 from ..auth.security import require_worker, require_any_role, require_supervisor_or_admin
 from ..config import settings
 
 router = APIRouter(prefix="/equipment", tags=["Equipment Issue Reporting"])
 
 
+class EquipmentReportPayload(BaseModel):
+    equipment_type: Optional[str] = None
+    equipment_name: Optional[str] = None
+    category: Optional[str] = None
+    equipment_id: Optional[str] = None
+    location: Optional[str] = None
+    urgency: Optional[str] = "Medium"
+    priority: Optional[str] = "Medium"
+    description: str
+    photo_base64: Optional[str] = None
+    voice_base64: Optional[str] = None
+
+
 @router.post("/report")
 def create_equipment_issue_report(
-    payload: Optional[EquipmentIssueReportCreate] = None,
-    equipment_type: Optional[str] = Form(None),
-    equipment_id: Optional[str] = Form(None),
-    location: Optional[str] = Form(None),
-    priority: Optional[str] = Form("Medium"),
-    description: Optional[str] = Form(None),
-    photo_base64: Optional[str] = Form(None),
-    voice_base64: Optional[str] = Form(None),
+    payload: EquipmentReportPayload = Body(...),
     db: Session = Depends(get_db),
     worker: User = Depends(require_worker)
 ):
     """
-    Workers report equipment issues (Broken Helmet, Damaged Drill, Faulty Machine,
-    Gas Sensor Failure, Broken Rope, Electrical Problem) with photo, voice, description, and priority.
+    Workers report equipment issues with photo, voice, description, and priority.
     Automatically creates instant notifications for Admin and Supervisor.
     """
-    eq_type = payload.equipment_type if payload else equipment_type
-    eq_id = (payload.equipment_id if payload else equipment_id) or f"EQP-{uuid.uuid4().hex[:6].upper()}"
-    eq_loc = payload.location if payload else location
-    eq_prio = (payload.priority if payload else priority) or "Medium"
-    eq_desc = payload.description if payload else description
-    p_b64 = payload.photo_base64 if payload else photo_base64
-    v_b64 = payload.voice_base64 if payload else voice_base64
+    eq_type = payload.equipment_type or payload.category or payload.equipment_name or "General Equipment"
+    eq_id = payload.equipment_id or f"EQP-{uuid.uuid4().hex[:6].upper()}"
+    eq_loc = payload.location or "Pit Shaft Alpha"
+    eq_prio = payload.urgency or payload.priority or "Medium"
+    eq_desc = payload.description
 
-    if not eq_type or not eq_loc or not eq_desc:
+    if not eq_desc or not eq_desc.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Equipment type, location, and description are required"
+            detail="Description is required for equipment reporting"
         )
 
     # Handle Photo file upload / base64
     photo_url = None
+    p_b64 = payload.photo_base64
     if p_b64:
         try:
             b64 = p_b64.split(",")[1] if "," in p_b64 else p_b64
@@ -64,6 +68,7 @@ def create_equipment_issue_report(
 
     # Handle Voice file base64
     voice_url = None
+    v_b64 = payload.voice_base64
     if v_b64:
         try:
             b64 = v_b64.split(",")[1] if "," in v_b64 else v_b64
@@ -96,19 +101,22 @@ def create_equipment_issue_report(
     db.refresh(report)
 
     # Create instant notification for Supervisors & Admins
-    supervisors_and_admins = db.query(User).filter(User.role.in_(["supervisor", "admin"])).all()
-    for recipient in supervisors_and_admins:
-        notif = Notification(
-            user_id=recipient.id,
-            sender_id=worker.id,
-            title=f"⚠️ {eq_prio.upper()} Equipment Issue: {eq_type}",
-            message=f"Worker {worker.username} reported '{eq_type}' ({eq_id}) issue at {eq_loc}: {eq_desc[:80]}...",
-            type="safety_alert",
-            category="Equipment",
-            priority="critical" if eq_prio.lower() in ["high", "critical"] else "warning"
-        )
-        db.add(notif)
-    db.commit()
+    try:
+        supervisors_and_admins = db.query(User).filter(User.role.in_(["supervisor", "admin"])).all()
+        for recipient in supervisors_and_admins:
+            notif = Notification(
+                user_id=recipient.id,
+                sender_id=worker.id,
+                title=f"⚠️ {eq_prio.upper()} Equipment Issue: {eq_type}",
+                message=f"Worker {worker.username} reported '{eq_type}' ({eq_id}) issue at {eq_loc}: {eq_desc[:80]}...",
+                type="safety_alert",
+                category="Equipment",
+                priority="critical" if eq_prio.lower() in ["high", "critical"] else "warning"
+            )
+            db.add(notif)
+        db.commit()
+    except Exception as ne:
+        print("Failed to create equipment notification:", ne)
 
     return {
         "success": True,

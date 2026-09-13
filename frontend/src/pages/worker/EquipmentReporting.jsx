@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -22,6 +22,7 @@ import {
   TableRow,
   Tabs,
   Tab,
+  Stack
 } from "@mui/material";
 import {
   Build as EquipmentIcon,
@@ -30,7 +31,9 @@ import {
   Mic as MicIcon,
   History as HistoryIcon,
   Send as SendIcon,
+  CheckCircle as CheckIcon
 } from "@mui/icons-material";
+import apiClient from "../../api/client";
 
 const EQUIPMENT_TYPES = [
   "Broken Helmet / PPE",
@@ -51,9 +54,13 @@ export default function EquipmentReporting() {
   const [urgency, setUrgency] = useState("High");
   const [description, setDescription] = useState("");
   const [voiceNote, setVoiceNote] = useState("");
+  const [photoBase64, setPhotoBase64] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [reports, setReports] = useState([]);
+
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchReports();
@@ -61,13 +68,32 @@ export default function EquipmentReporting() {
 
   const fetchReports = async () => {
     try {
-      const res = await fetch("http://localhost:8000/api/equipment/reports");
-      const data = await res.json();
-      if (data.success) {
-        setReports(data.reports);
+      const res = await apiClient.get("/equipment/my-reports");
+      if (res.data && res.data.reports) {
+        setReports(res.data.reports);
       }
     } catch (err) {
       console.error("Failed to fetch equipment reports:", err);
+      // Fallback try all reports
+      try {
+        const fallbackRes = await apiClient.get("/equipment/reports");
+        if (fallbackRes.data && fallbackRes.data.reports) {
+          setReports(fallbackRes.data.reports);
+        }
+      } catch (e2) {
+        console.error("Fallback reports fetch failed:", e2);
+      }
+    }
+  };
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoBase64(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -76,33 +102,32 @@ export default function EquipmentReporting() {
     if (!description.trim()) return;
 
     setIsSubmitting(true);
+    setErrorMsg("");
     try {
       const payload = {
+        equipment_type: category,
         equipment_id: equipmentId || `EQP-${Math.floor(1000 + Math.random() * 9000)}`,
-        equipment_name: category,
-        category: category,
         location: location,
-        urgency: urgency,
+        priority: urgency,
         description: description,
-        reported_by: "Current Worker",
+        photo_base64: photoBase64,
+        voice_base64: voiceNote ? "Recorded Voice Description" : null
       };
 
-      const res = await fetch("http://localhost:8000/api/equipment/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setSuccessMsg("Equipment issue reported! Maintenance team notified.");
+      const res = await apiClient.post("/equipment/report", payload);
+      if (res.data && res.data.success) {
+        setSuccessMsg("Equipment issue reported! Maintenance team and supervisors notified.");
         setDescription("");
         setEquipmentId("");
+        setPhotoBase64(null);
+        setVoiceNote("");
         fetchReports();
-        setTimeout(() => setSuccessMsg(""), 4000);
+        setTabIndex(1);
+        setTimeout(() => setSuccessMsg(""), 5000);
       }
     } catch (err) {
       console.error("Submission failed:", err);
+      setErrorMsg(err.response?.data?.detail || "Failed to submit equipment issue report.");
     } finally {
       setIsSubmitting(false);
     }
@@ -111,9 +136,9 @@ export default function EquipmentReporting() {
   const getUrgencyChip = (val) => {
     switch (val) {
       case "Critical":
-        return <Chip label="Critical" color="error" size="small" fontWeight="bold" />;
+        return <Chip label="Critical" color="error" size="small" sx={{ fontWeight: "bold" }} />;
       case "High":
-        return <Chip label="High" color="warning" size="small" />;
+        return <Chip label="High" color="warning" size="small" sx={{ fontWeight: "bold" }} />;
       case "Medium":
         return <Chip label="Medium" color="info" size="small" />;
       default:
@@ -133,7 +158,7 @@ export default function EquipmentReporting() {
       case "Rejected":
         return <Chip label="Rejected ❌" color="error" size="small" />;
       default:
-        return <Chip label="Submitted ⏳" color="default" size="small" />;
+        return <Chip label="Submitted ⏳" color="primary" size="small" />;
     }
   };
 
@@ -177,6 +202,12 @@ export default function EquipmentReporting() {
         {successMsg && (
           <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
             {successMsg}
+          </Alert>
+        )}
+
+        {errorMsg && (
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+            {errorMsg}
           </Alert>
         )}
 
@@ -254,15 +285,25 @@ export default function EquipmentReporting() {
                 />
               </Grid>
 
+              {/* Photo Upload Input */}
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handlePhotoUpload}
+              />
+
               {/* Attachments */}
               <Grid item xs={12} sm={6}>
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<PhotoIcon />}
-                  sx={{ color: "#38bdf8", borderColor: "#334155", py: 1.2 }}
+                  startIcon={photoBase64 ? <CheckIcon color="success" /> : <PhotoIcon />}
+                  onClick={() => fileInputRef.current?.click()}
+                  sx={{ color: photoBase64 ? "#4ade80" : "#38bdf8", borderColor: "#334155", py: 1.2 }}
                 >
-                  Upload Equipment Photo
+                  {photoBase64 ? "Photo Attached ✔" : "Upload Equipment Photo"}
                 </Button>
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -271,7 +312,7 @@ export default function EquipmentReporting() {
                   variant="outlined"
                   startIcon={<MicIcon />}
                   onClick={() => setVoiceNote("Voice memo recorded (0:12)")}
-                  sx={{ color: "#a855f7", borderColor: "#334155", py: 1.2 }}
+                  sx={{ color: voiceNote ? "#a855f7" : "#cbd5e1", borderColor: "#334155", py: 1.2 }}
                 >
                   {voiceNote || "Record Voice Description"}
                 </Button>
@@ -287,7 +328,7 @@ export default function EquipmentReporting() {
                   startIcon={<SendIcon />}
                   sx={{ bgcolor: "#f59e0b", color: "#000", fontWeight: "bold", "&:hover": { bgcolor: "#d97706" } }}
                 >
-                  Submit Equipment Report
+                  {isSubmitting ? "Submitting..." : "Submit Equipment Report"}
                 </Button>
               </Grid>
             </Grid>
@@ -307,18 +348,26 @@ export default function EquipmentReporting() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {reports.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ color: "#38bdf8", fontWeight: "bold" }}>{row.equipment_id}</TableCell>
-                    <TableCell sx={{ color: "#fff" }}>
-                      <Typography variant="body2" fontWeight="bold">{row.equipment_name}</Typography>
-                      <Typography variant="caption" color="#94a3b8">{row.location}</Typography>
+                {reports.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ color: "#94a3b8", py: 4 }}>
+                      No equipment issues reported yet.
                     </TableCell>
-                    <TableCell>{getUrgencyChip(row.urgency)}</TableCell>
-                    <TableCell sx={{ color: "#cbd5e1", maxWidth: 220 }}>{row.description}</TableCell>
-                    <TableCell>{getStatusChip(row.status)}</TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  reports.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell sx={{ color: "#38bdf8", fontWeight: "bold" }}>{row.equipment_id}</TableCell>
+                      <TableCell sx={{ color: "#fff" }}>
+                        <Typography variant="body2" fontWeight="bold">{row.equipment_name || row.category}</Typography>
+                        <Typography variant="caption" color="#94a3b8">{row.location}</Typography>
+                      </TableCell>
+                      <TableCell>{getUrgencyChip(row.urgency || row.priority)}</TableCell>
+                      <TableCell sx={{ color: "#cbd5e1", maxWidth: 220 }}>{row.description}</TableCell>
+                      <TableCell>{getStatusChip(row.status)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>

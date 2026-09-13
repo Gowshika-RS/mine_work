@@ -19,3 +19,8 @@ export { default as SupervisorGeofenceAlerts } from './SupervisorGeofenceAlerts'
 export { default as SupervisorEnvironment } from './SupervisorEnvironment';
 export { default as SupervisorIncidents } from './SupervisorIncidents';
 export { default as SupervisorShiftHandover } from './SupervisorShiftHandover';
+export { SupervisorLeave } from './SupervisorLeave';
+export { SupervisorMineMonitoring } from './SupervisorMineMonitoring';
+export { SupervisorAnnouncements } from './SupervisorAnnouncements';
+export { SupervisorShifts } from './SupervisorShifts';
+export { SupervisorHealthMonitoring } from './SupervisorHealthMonitoring';

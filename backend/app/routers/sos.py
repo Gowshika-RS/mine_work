@@ -94,7 +94,10 @@ def get_active_sos(
     db: Session = Depends(get_db),
     user: User = Depends(require_any_role)
 ):
-    alerts = db.query(SOSAlert).filter(SOSAlert.status != "resolved").order_by(SOSAlert.timestamp.desc()).all()
+    query = db.query(SOSAlert).filter(SOSAlert.status != "resolved")
+    if user.role == "worker":
+        query = query.filter(SOSAlert.worker_id == user.id)
+    alerts = query.order_by(SOSAlert.timestamp.desc()).all()
     return [enrich_sos_alert(a, db) for a in alerts]
 
 @router.get("/history", response_model=List[SOSAlertOut])
@@ -110,13 +113,19 @@ async def update_sos_status(
     sos_id: int,
     payload: SOSAlertUpdate,
     db: Session = Depends(get_db),
-    updater: User = Depends(require_supervisor_or_admin)
+    updater: User = Depends(require_any_role)
 ):
     sos = db.query(SOSAlert).filter(SOSAlert.id == sos_id).first()
     if not sos:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="SOS record not found"
+        )
+        
+    if updater.role == "worker" and sos.worker_id != updater.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own SOS alert status"
         )
         
     sos.status = payload.status

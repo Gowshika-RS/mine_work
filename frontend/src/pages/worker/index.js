@@ -20,3 +20,5 @@ export { default as EquipmentReporting } from './EquipmentReporting';
 export { default as OfflineReports } from './OfflineReports';
 export { default as ShiftMonitoring } from './ShiftMonitoring';
 export { default as IncidentHistory } from './IncidentHistory';
+export { WorkerLeave } from './WorkerLeave';
+

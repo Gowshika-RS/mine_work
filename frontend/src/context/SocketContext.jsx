@@ -124,11 +124,17 @@ export const SocketProvider = ({ children }) => {
         }
       };
 
-      ws.onclose = () => {
-        console.log("WebSocket disconnected.");
+      ws.onclose = (event) => {
+        console.log(`WebSocket disconnected. Code: ${event.code}`);
         setIsConnected(false);
         setSocket(null);
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+
+        // Stop reconnecting if authorization failed (4002 Unauthorized, 4003 Forbidden, 1008 Policy Violation)
+        if (event.code === 4002 || event.code === 4003 || event.code === 1008) {
+          console.warn("WebSocket authentication rejected (token expired or invalid). Stopping reconnect loop.");
+          return;
+        }
 
         // Auto retry after 5s if logged in
         setTimeout(() => {

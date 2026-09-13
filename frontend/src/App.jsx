@@ -34,6 +34,7 @@ import {
   OfflineReports,
   ShiftMonitoring,
   IncidentHistory,
+  WorkerLeave,
 } from "./pages/worker";
 
 
@@ -60,6 +61,7 @@ import {
   CommunicationCenter,
   Analytics as AdminAnalytics,
   IncidentHistory as AdminIncidentHistory,
+  AdminLeave,
 } from "./pages/admin";
 
 // Supervisor Pages
@@ -85,7 +87,26 @@ import {
   SupervisorEnvironment,
   SupervisorIncidents,
   SupervisorShiftHandover,
+  SupervisorLeave,
+  SupervisorMineMonitoring,
+  SupervisorAnnouncements,
+  SupervisorShifts,
+  SupervisorHealthMonitoring,
 } from "./pages/supervisor";
+
+// Emergency Officer Pages
+import {
+  EmergencyDashboard,
+  EmergencySOSCenter,
+  EmergencyLiveMap,
+  EmergencyHazards,
+  EmergencyDispatch,
+  EmergencyBroadcast,
+  EmergencyEnvironment,
+  EmergencyIncidentLogs,
+  EmergencyProfile,
+  EmergencyLeave,
+} from "./pages/emergency";
 
 function App() {
   const { isDarkMode, toggleTheme } = useTheme();
@@ -158,6 +179,8 @@ function App() {
           ? '/admin/dashboard'
           : userRole === 'supervisor'
           ? '/supervisor/dashboard'
+          : userRole === 'emergency_officer'
+          ? '/emergency/dashboard'
           : '/worker/dashboard';
       return <Navigate to={redirectPath} replace />;
     }
@@ -240,6 +263,7 @@ function App() {
               <Route path="/worker/equipment-reporting" element={<ProtectedLayout role="worker"><EquipmentReporting /></ProtectedLayout>} />
               <Route path="/worker/shift-monitoring" element={<ProtectedLayout role="worker"><ShiftMonitoring /></ProtectedLayout>} />
               <Route path="/worker/incident-history" element={<ProtectedLayout role="worker"><IncidentHistory /></ProtectedLayout>} />
+              <Route path="/worker/leave" element={<ProtectedLayout role="worker"><WorkerLeave /></ProtectedLayout>} />
 
 
             {/* Admin Routes */}
@@ -248,6 +272,7 @@ function App() {
             <Route path="/admin/worker-details" element={<ProtectedLayout role="admin"><WorkerDetails /></ProtectedLayout>} />
             <Route path="/admin/supervisors" element={<ProtectedLayout role="admin"><Supervisors /></ProtectedLayout>} />
             <Route path="/admin/users" element={<ProtectedLayout role="admin"><UserManagement /></ProtectedLayout>} />
+            <Route path="/admin/leave" element={<ProtectedLayout role="admin"><AdminLeave /></ProtectedLayout>} />
             <Route path="/admin/live-map" element={<ProtectedLayout role="admin"><LiveMap /></ProtectedLayout>} />
             <Route path="/admin/hazards" element={<ProtectedLayout role="admin"><AdminHazards /></ProtectedLayout>} />
             <Route path="/admin/sos-center" element={<ProtectedLayout role="admin"><SOSCenter /></ProtectedLayout>} />
@@ -268,6 +293,7 @@ function App() {
             {/* Supervisor Routes */}
             <Route path="/supervisor/dashboard" element={<ProtectedLayout role="supervisor"><SupervisorDashboard /></ProtectedLayout>} />
             <Route path="/supervisor/workers" element={<ProtectedLayout role="supervisor"><SupervisorWorkers /></ProtectedLayout>} />
+            <Route path="/supervisor/shifts" element={<ProtectedLayout role="supervisor"><SupervisorShifts /></ProtectedLayout>} />
             <Route path="/supervisor/live-tracking" element={<ProtectedLayout role="supervisor"><SupervisorLiveTracking /></ProtectedLayout>} />
             <Route path="/supervisor/emergency-center" element={<ProtectedLayout role="supervisor"><SupervisorEmergencyCenter /></ProtectedLayout>} />
             <Route path="/supervisor/hazards" element={<ProtectedLayout role="supervisor"><SupervisorHazards /></ProtectedLayout>} />
@@ -275,18 +301,36 @@ function App() {
             <Route path="/supervisor/ppe-monitoring" element={<ProtectedLayout role="supervisor"><SupervisorPPEMonitoring /></ProtectedLayout>} />
             <Route path="/supervisor/checklists" element={<ProtectedLayout role="supervisor"><SupervisorChecklists /></ProtectedLayout>} />
             <Route path="/supervisor/attendance" element={<ProtectedLayout role="supervisor"><SupervisorAttendance /></ProtectedLayout>} />
+            <Route path="/supervisor/leave" element={<ProtectedLayout role="supervisor"><SupervisorLeave /></ProtectedLayout>} />
+            <Route path="/supervisor/health" element={<ProtectedLayout role="supervisor"><SupervisorHealthMonitoring /></ProtectedLayout>} />
             <Route path="/supervisor/safety-scores" element={<ProtectedLayout role="supervisor"><SupervisorSafetyScores /></ProtectedLayout>} />
             <Route path="/supervisor/zones" element={<ProtectedLayout role="supervisor"><SupervisorZones /></ProtectedLayout>} />
             <Route path="/supervisor/geofence-alerts" element={<ProtectedLayout role="supervisor"><SupervisorGeofenceAlerts /></ProtectedLayout>} />
             <Route path="/supervisor/environment" element={<ProtectedLayout role="supervisor"><SupervisorEnvironment /></ProtectedLayout>} />
+            <Route path="/supervisor/mine-monitoring" element={<ProtectedLayout role="supervisor"><SupervisorMineMonitoring /></ProtectedLayout>} />
             <Route path="/supervisor/tasks" element={<ProtectedLayout role="supervisor"><SupervisorTaskManagement /></ProtectedLayout>} />
             <Route path="/supervisor/communication" element={<ProtectedLayout role="supervisor"><SupervisorCommunication /></ProtectedLayout>} />
+            <Route path="/supervisor/announcements" element={<ProtectedLayout role="supervisor"><SupervisorAnnouncements /></ProtectedLayout>} />
             <Route path="/supervisor/notifications" element={<ProtectedLayout role="supervisor"><SupervisorNotifications /></ProtectedLayout>} />
             <Route path="/supervisor/incidents" element={<ProtectedLayout role="supervisor"><SupervisorIncidents /></ProtectedLayout>} />
             <Route path="/supervisor/shift-handover" element={<ProtectedLayout role="supervisor"><SupervisorShiftHandover /></ProtectedLayout>} />
             <Route path="/supervisor/analytics" element={<ProtectedLayout role="supervisor"><SupervisorSafetyAnalytics /></ProtectedLayout>} />
             <Route path="/supervisor/reports" element={<ProtectedLayout role="supervisor"><SupervisorReports /></ProtectedLayout>} />
             <Route path="/supervisor/profile" element={<ProtectedLayout role="supervisor"><SupervisorProfile /></ProtectedLayout>} />
+
+            {/* Emergency Officer Routes */}
+            <Route path="/emergency/dashboard" element={<ProtectedLayout role="emergency_officer"><EmergencyDashboard /></ProtectedLayout>} />
+            <Route path="/emergency/sos-center" element={<ProtectedLayout role="emergency_officer"><EmergencySOSCenter /></ProtectedLayout>} />
+            <Route path="/emergency/live-map" element={<ProtectedLayout role="emergency_officer"><EmergencyLiveMap /></ProtectedLayout>} />
+            <Route path="/emergency/hazards" element={<ProtectedLayout role="emergency_officer"><EmergencyHazards /></ProtectedLayout>} />
+            <Route path="/emergency/dispatch" element={<ProtectedLayout role="emergency_officer"><EmergencyDispatch /></ProtectedLayout>} />
+            <Route path="/emergency/broadcast" element={<ProtectedLayout role="emergency_officer"><EmergencyBroadcast /></ProtectedLayout>} />
+            <Route path="/emergency/environment" element={<ProtectedLayout role="emergency_officer"><EmergencyEnvironment /></ProtectedLayout>} />
+            <Route path="/emergency/incidents" element={<ProtectedLayout role="emergency_officer"><EmergencyIncidentLogs /></ProtectedLayout>} />
+            <Route path="/emergency/communication" element={<ProtectedLayout role="emergency_officer"><SupervisorCommunication /></ProtectedLayout>} />
+            <Route path="/emergency/leave" element={<ProtectedLayout role="emergency_officer"><EmergencyLeave /></ProtectedLayout>} />
+            <Route path="/emergency/notifications" element={<ProtectedLayout role="emergency_officer"><SupervisorNotifications /></ProtectedLayout>} />
+            <Route path="/emergency/profile" element={<ProtectedLayout role="emergency_officer"><EmergencyProfile /></ProtectedLayout>} />
 
             {/* Fallback Catch-all Route */}
             <Route
@@ -297,6 +341,8 @@ function App() {
                     <Navigate to="/admin/dashboard" replace />
                   ) : userRole === 'supervisor' ? (
                     <Navigate to="/supervisor/dashboard" replace />
+                  ) : userRole === 'emergency_officer' ? (
+                    <Navigate to="/emergency/dashboard" replace />
                   ) : (
                     <Navigate to="/worker/dashboard" replace />
                   )

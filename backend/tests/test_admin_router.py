@@ -17,7 +17,7 @@ def setup_module(module):
             db.add(User(
                 username='admin',
                 email='admin@minesafety.com',
-                hashed_password=get_password_hash('adminpassword'),
+                hashed_password=get_password_hash('admin123'),
                 role='admin',
                 is_active=True,
             ))
@@ -34,7 +34,7 @@ def test_admin_overview_requires_authentication():
 def test_admin_login_and_overview():
     login_response = client.post('/api/auth/login', json={
         'username': 'admin',
-        'password': 'adminpassword',
+        'password': 'admin123',
     })
     assert login_response.status_code == 200
     token = login_response.json()['access_token']

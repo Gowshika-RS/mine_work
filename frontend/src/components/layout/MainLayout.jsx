@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, Container } from '@mui/material';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
@@ -5,26 +6,42 @@ import { SOSButton } from './SOSButton';
 import { AIChatbot } from '../AIChatbot';
 
 export const MainLayout = ({ children, isDarkMode, onThemeToggle, userRole = 'worker', onLogout }) => {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const handleToggleCollapse = () => {
+    setCollapsed(prev => !prev);
+  };
+
+  const sidebarWidth = collapsed ? '76px' : '260px';
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Sidebar hidden on mobile */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-        <Sidebar isDarkMode={isDarkMode} onThemeToggle={onThemeToggle} userRole={userRole} onLogout={onLogout} />
+        <Sidebar
+          isDarkMode={isDarkMode}
+          onThemeToggle={onThemeToggle}
+          userRole={userRole}
+          onLogout={onLogout}
+          collapsed={collapsed}
+          onToggleCollapse={handleToggleCollapse}
+        />
       </Box>
-      
+
       <Box
         component="main"
         sx={{
           flex: 1,
-          p: { xs: 2, md: 3 },
-          ml: { xs: 0, md: '280px' },
+          p: { xs: 1.5, sm: 2, md: 3 },
+          ml: { xs: 0, md: sidebarWidth },
+          transition: 'margin-left 0.25s ease',
           mt: { xs: 2, md: 0 },
-          pb: { xs: 10, md: 3 }, // extra padding on mobile for bottom nav
+          pb: { xs: 10, md: 3 },
           overflowY: 'auto',
           width: '100%',
         }}
       >
-        <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2 } }}>
+        <Container maxWidth="xl" sx={{ px: { xs: 1, sm: 2 } }}>
           {children}
         </Container>
       </Box>

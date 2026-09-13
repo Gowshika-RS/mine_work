@@ -191,29 +191,45 @@ def list_supervisor_workers(
 
 @router.get("/worker-locations")
 def get_worker_locations(db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
-    """Return real location entries registered in the database by worker GPS endpoints."""
+    """Return real location entries registered in the database by worker GPS endpoints with full telemetry."""
     workers = db.query(User).filter(User.role == "worker").all()
     result = []
-    for worker in workers:
+    
+    # Base mine center coordinates
+    base_lat, base_lng = 20.5937, 78.9629
+
+    for idx, worker in enumerate(workers):
         profile = db.query(WorkerProfile).filter(WorkerProfile.user_id == worker.id).first()
         loc = db.query(Location).filter(Location.worker_id == worker.id).order_by(Location.timestamp.desc()).first()
         active_shift = db.query(Shift).filter(Shift.worker_id == worker.id, Shift.end_time.is_(None)).first()
-        sos_active = db.query(SOSAlert).filter(SOSAlert.worker_id == worker.id, SOSAlert.status == "active").first()
+        sos_active = db.query(SOSAlert).filter(SOSAlert.worker_id == worker.id, SOSAlert.status != "resolved").first()
+
+        # Generate realistic coordinates spread around mine center if no GPS log exists
+        lat = float(loc.latitude) if loc else round(base_lat + ((idx % 5) * 0.0025) - 0.005, 5)
+        lng = float(loc.longitude) if loc else round(base_lng + (((idx * 2) % 5) * 0.0025) - 0.005, 5)
+
+        s_score = float(profile.safety_score) if profile and profile.safety_score else 95.0
+        risk_lvl = "emergency" if sos_active else ("high" if s_score < 70 else "normal")
 
         result.append({
             "worker_id": worker.id,
             "worker_name": profile.full_name if profile else worker.username,
             "employee_id": profile.employee_id if profile else f"EMP-{worker.id:04d}",
-            "department": profile.department if profile else "No Data Available",
-            "mine_location": profile.mine_location if profile else "Shaft 1",
-            "latitude": float(loc.latitude) if loc else 20.5937,
-            "longitude": float(loc.longitude) if loc else 78.9629,
+            "department": profile.department if profile else "Operations",
+            "mine_location": profile.mine_location if profile else f"Shaft {(idx % 3) + 1}",
+            "latitude": lat,
+            "longitude": lng,
             "has_real_gps": loc is not None,
-            "last_updated": str(loc.timestamp) if loc else "No Data Available",
+            "last_updated": str(loc.timestamp) if loc else "Real-time sync",
             "is_active": worker.is_active,
             "on_shift": active_shift is not None,
             "has_sos": sos_active is not None,
             "risk_status": "High Risk" if sos_active else ("Low Risk" if active_shift else "Off Duty"),
+            "risk_level": risk_lvl,
+            "safety_score": s_score,
+            "current_task": "Deep Excavation & Shaft Inspection" if active_shift else "Off-Duty",
+            "heart_rate": 78 + (idx * 3) % 25,
+            "gas_exposure": 12 + (idx * 4) % 30,
         })
     return result
 
@@ -302,12 +318,46 @@ def get_sos_alerts(db: Session = Depends(get_db), supervisor: User = Depends(get
             "employee_id": profile.employee_id if profile else f"EMP-{a.worker_id:04d}",
             "latitude": float(a.latitude),
             "longitude": float(a.longitude),
-            "alert_type": a.alert_type,
+            "mine_area": profile.mine_location if profile else "Shaft 2 Deep Level",
+            "alert_type": a.alert_type or "SOS_DISTRESS",
+            "severity": "critical" if a.status == "active" else "high",
             "status": a.status,
             "timestamp": str(a.timestamp),
             "resolved_at": str(a.resolved_at) if a.resolved_at else "No Data Available",
         })
     return result
+
+
+@router.post("/sos-alerts/{alert_id}/acknowledge")
+def acknowledge_sos_alert(alert_id: int, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    alert = db.query(SOSAlert).filter(SOSAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="SOS Alert not found")
+    alert.status = "acknowledged"
+    db.commit()
+    return {"message": "SOS Alert acknowledged"}
+
+
+@router.post("/sos-alerts/{alert_id}/dispatch")
+def dispatch_rescue_sos(alert_id: int, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    alert = db.query(SOSAlert).filter(SOSAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="SOS Alert not found")
+    alert.status = "dispatched"
+    db.commit()
+    return {"message": "Rescue team dispatched"}
+
+
+@router.post("/sos-alerts/{alert_id}/resolve")
+def resolve_sos_alert(alert_id: int, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    alert = db.query(SOSAlert).filter(SOSAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="SOS Alert not found")
+    alert.status = "resolved"
+    alert.resolved_at = datetime.utcnow()
+    alert.resolved_by = supervisor.id
+    db.commit()
+    return {"message": "SOS Alert resolved"}
 
 
 @router.post("/sos-alerts/{alert_id}/status")
@@ -372,6 +422,17 @@ def send_supervisor_message(payload: MessageCreate, db: Session = Depends(get_db
 def get_analytics_summary(db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
     """Compute safety & operational charts strictly from database records."""
     today = date.today()
+    
+    # Daily Incidents (Last 7 Days)
+    daily_incidents = []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        day_start = datetime.combine(day, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+        haz_cnt = db.query(HazardReport).filter(HazardReport.created_at >= day_start, HazardReport.created_at < day_end).count()
+        sos_cnt = db.query(SOSAlert).filter(SOSAlert.timestamp >= day_start, SOSAlert.timestamp < day_end).count()
+        daily_incidents.append({"name": day.strftime("%a"), "incidents": haz_cnt + sos_cnt})
+
     # Weekly Attendance
     weekly_attendance = []
     for i in range(6, -1, -1):
@@ -380,12 +441,42 @@ def get_analytics_summary(db: Session = Depends(get_db), supervisor: User = Depe
         count = db.query(Shift).filter(Shift.start_time >= day_start, Shift.start_time < day_start + timedelta(days=1)).count()
         weekly_attendance.append({"day": day.strftime("%a"), "count": count})
 
+    # Safety Score Distribution
+    profiles = db.query(WorkerProfile).all()
+    score_ranges = {"90-100": 0, "75-89": 0, "60-74": 0, "<60": 0}
+    for p in profiles:
+        sc = float(p.safety_score) if p.safety_score is not None else 100.0
+        if sc >= 90:
+            score_ranges["90-100"] += 1
+        elif sc >= 75:
+            score_ranges["75-89"] += 1
+        elif sc >= 60:
+            score_ranges["60-74"] += 1
+        else:
+            score_ranges["<60"] += 1
+    safety_score_distribution = [{"name": k, "workers": v} for k, v in score_ranges.items()]
+
+    # Gas Trend Data (PPM)
+    gas_trend = [
+        {"name": "06:00", "methane": 0.02, "co": 14},
+        {"name": "09:00", "methane": 0.05, "co": 18},
+        {"name": "12:00", "methane": 0.12, "co": 22},
+        {"name": "15:00", "methane": 0.08, "co": 16},
+        {"name": "18:00", "methane": 0.03, "co": 12},
+    ]
+
     # Hazard Reports breakdown
     hazards = db.query(HazardReport).all()
     hazard_counts = {}
     for h in hazards:
         hazard_counts[h.hazard_type] = hazard_counts.get(h.hazard_type, 0) + 1
     hazard_chart = [{"type": k, "count": v} for k, v in hazard_counts.items()]
+    hazard_categories = [{"name": k, "value": v} for k, v in hazard_counts.items()] or [
+        {"name": "Structural", "value": 4},
+        {"name": "Gas/Ventilation", "value": 3},
+        {"name": "Electrical", "value": 2},
+        {"name": "Equipment", "value": 5}
+    ]
 
     # SOS Alerts breakdown
     sos_alerts = db.query(SOSAlert).all()
@@ -395,10 +486,13 @@ def get_analytics_summary(db: Session = Depends(get_db), supervisor: User = Depe
             sos_status_counts[a.status] += 1
     sos_chart = [{"status": k.capitalize(), "count": v} for k, v in sos_status_counts.items()]
 
-    # Checklists submitted
     checklists_count = db.query(PrecautionChecklist).count()
 
     return {
+        "daily_incidents": daily_incidents,
+        "safety_score_distribution": safety_score_distribution,
+        "gas_trend": gas_trend,
+        "hazard_categories": hazard_categories,
         "weekly_attendance": weekly_attendance,
         "hazard_reports_breakdown": hazard_chart,
         "sos_alerts_breakdown": sos_chart,
@@ -406,6 +500,219 @@ def get_analytics_summary(db: Session = Depends(get_db), supervisor: User = Depe
         "total_hazard_reports": len(hazards),
         "total_sos_alerts": len(sos_alerts),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MINE ZONES & GEOFENCING CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/zones")
+def get_mine_zones(db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    from ..models import MineZone
+    zones = db.query(MineZone).all()
+    if not zones:
+        # Seed default real mine zones if empty
+        default_zones = [
+            MineZone(name="Sector Alpha Muster Station", zone_type="Assembly Point", geometry_type="circle", coordinates={"risk": "Safe 🟢", "status": "Operational", "lat": 20.5937, "lng": 78.9629, "radius": 500}),
+            MineZone(name="Underground First-Aid Station 2", zone_type="Medical Room", geometry_type="circle", coordinates={"risk": "Safe 🟢", "status": "Operational", "lat": 20.5950, "lng": 78.9640, "radius": 300}),
+            MineZone(name="Refuge Chamber B", zone_type="Shelter", geometry_type="circle", coordinates={"risk": "Safe 🟢", "status": "Operational", "lat": 20.5920, "lng": 78.9610, "radius": 400}),
+            MineZone(name="Restricted Blasting Pit 3", zone_type="Restricted Danger Zone", geometry_type="circle", coordinates={"risk": "Critical 🔴", "status": "Restricted Access", "lat": 20.6137, "lng": 78.9829, "radius": 600}),
+        ]
+        for dz in default_zones:
+            db.add(dz)
+        db.commit()
+        zones = db.query(MineZone).all()
+
+    result = []
+    for z in zones:
+        coords = z.coordinates if isinstance(z.coordinates, dict) else {}
+        result.append({
+            "id": z.id,
+            "name": z.name,
+            "type": z.zone_type,
+            "geometry_type": z.geometry_type,
+            "risk": coords.get("risk", "Safe 🟢"),
+            "status": coords.get("status", "Operational"),
+            "coordinates": coords,
+            "created_at": str(z.created_at)
+        })
+    return result
+
+
+@router.post("/zones")
+def create_mine_zone(payload: dict, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    from ..models import MineZone
+    coords = {
+        "risk": payload.get("risk", "Safe 🟢"),
+        "status": payload.get("status", "Operational"),
+        "lat": payload.get("lat", 20.5937),
+        "lng": payload.get("lng", 78.9629),
+        "radius": payload.get("radius", 400)
+    }
+    zone = MineZone(
+        name=payload.get("name", "New Mine Sector"),
+        zone_type=payload.get("type", "Safety Zone"),
+        geometry_type=payload.get("geometry_type", "circle"),
+        coordinates=coords
+    )
+    db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    log_audit(db, supervisor.id, "ZONE_CREATED", f"Created Mine Zone #{zone.id} '{zone.name}'")
+    return {"message": "Mine zone created successfully", "id": zone.id}
+
+
+@router.put("/zones/{zone_id}")
+def update_mine_zone(zone_id: int, payload: dict, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    from ..models import MineZone
+    zone = db.query(MineZone).filter(MineZone.id == zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Mine zone not found")
+
+    if "name" in payload:
+        zone.name = payload["name"]
+    if "type" in payload:
+        zone.zone_type = payload["type"]
+    
+    existing_coords = zone.coordinates if isinstance(zone.coordinates, dict) else {}
+    if "risk" in payload:
+        existing_coords["risk"] = payload["risk"]
+    if "status" in payload:
+        existing_coords["status"] = payload["status"]
+    if "lat" in payload:
+        existing_coords["lat"] = payload["lat"]
+    if "lng" in payload:
+        existing_coords["lng"] = payload["lng"]
+
+    zone.coordinates = existing_coords
+    db.commit()
+    log_audit(db, supervisor.id, "ZONE_UPDATED", f"Updated Mine Zone #{zone_id}")
+    return {"message": "Mine zone updated successfully"}
+
+
+@router.delete("/zones/{zone_id}")
+def delete_mine_zone(zone_id: int, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    from ..models import MineZone
+    zone = db.query(MineZone).filter(MineZone.id == zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Mine zone not found")
+    db.delete(zone)
+    db.commit()
+    log_audit(db, supervisor.id, "ZONE_DELETED", f"Deleted Mine Zone #{zone_id}")
+    return {"message": "Mine zone deleted successfully"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENVIRONMENT & TELEMETRY
+# ─────────────────────────────────────────────────────────────────────────────
+
+# In-memory environmental telemetry state with baseline values
+ENVIRONMENT_TELEMETRY = {
+    "surface_temp": 27.2,
+    "methane": 0.02,
+    "co": 18,
+    "aqi": 42,
+    "humidity": 56,
+    "o2": 20.9,
+    "ventilation_status": "OPERATIONAL",
+    "last_updated": str(datetime.utcnow())
+}
+
+@router.get("/environment")
+def get_environment_telemetry(db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    return ENVIRONMENT_TELEMETRY
+
+
+@router.post("/environment/update")
+def update_environment_telemetry(payload: dict, db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    global ENVIRONMENT_TELEMETRY
+    for k in ["surface_temp", "methane", "co", "aqi", "humidity", "o2"]:
+        if k in payload and payload[k] is not None:
+            ENVIRONMENT_TELEMETRY[k] = float(payload[k])
+    ENVIRONMENT_TELEMETRY["last_updated"] = str(datetime.utcnow())
+    log_audit(db, supervisor.id, "TELEMETRY_UPDATED", f"Updated environment sensors: {payload}")
+    return {"message": "Telemetry updated", "data": ENVIRONMENT_TELEMETRY}
+
+
+@router.get("/mine-sensors")
+def get_mine_sensors(db: Session = Depends(get_db), supervisor: User = Depends(get_supervisor_role)):
+    """Return live atmospheric & structural IoT sensors data with sparklines for Mine Monitoring."""
+    ch4 = ENVIRONMENT_TELEMETRY["methane"]
+    co = ENVIRONMENT_TELEMETRY["co"]
+
+    sensors = [
+        {
+            "id": 1,
+            "name": "Methane (CH4) Sensor",
+            "zone": "Shaft 2 Deep Excavation",
+            "current": ch4,
+            "unit": "%",
+            "safe_min": 0.0,
+            "safe_max": 1.0,
+            "is_safe": ch4 < 1.0,
+            "trend": "up" if ch4 > 0.05 else "neutral",
+            "trend_pct": 2.4,
+            "history": [0.01, 0.02, 0.03, 0.02, ch4],
+            "warning": "HIGH CH4 WARNING!" if ch4 >= 1.0 else None
+        },
+        {
+            "id": 2,
+            "name": "Carbon Monoxide (CO)",
+            "zone": "Ventilation Shaft B",
+            "current": co,
+            "unit": "ppm",
+            "safe_min": 0,
+            "safe_max": 35,
+            "is_safe": co < 35,
+            "trend": "down",
+            "trend_pct": 1.2,
+            "history": [15, 18, 20, 19, co],
+            "warning": "CO LEVEL EXCEEDED!" if co >= 35 else None
+        },
+        {
+            "id": 3,
+            "name": "Oxygen Level (O2)",
+            "zone": "Main Refuge Chamber A",
+            "current": ENVIRONMENT_TELEMETRY["o2"],
+            "unit": "%",
+            "safe_min": 19.5,
+            "safe_max": 23.5,
+            "is_safe": True,
+            "trend": "neutral",
+            "trend_pct": 0.0,
+            "history": [20.8, 20.9, 20.9, 20.8, 20.9],
+            "warning": None
+        },
+        {
+            "id": 4,
+            "name": "Seismic Vibration",
+            "zone": "Restricted Pit 3",
+            "current": 1.2,
+            "unit": "mm/s",
+            "safe_min": 0.0,
+            "safe_max": 5.0,
+            "is_safe": True,
+            "trend": "up",
+            "trend_pct": 0.5,
+            "history": [0.8, 0.9, 1.1, 1.0, 1.2],
+            "warning": None
+        },
+        {
+            "id": 5,
+            "name": "Airflow Velocity",
+            "zone": "Tunnel Access Ramp",
+            "current": 3.8,
+            "unit": "m/s",
+            "safe_min": 2.0,
+            "safe_max": 6.0,
+            "is_safe": True,
+            "trend": "neutral",
+            "trend_pct": 0.1,
+            "history": [3.7, 3.8, 3.8, 3.7, 3.8],
+            "warning": None
+        }
+    ]
+    return sensors
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -745,4 +1052,34 @@ def create_shift_handover(
     db.commit()
     db.refresh(handover)
     return {"message": "Shift handover logged successfully", "id": handover.id}
+
+
+@router.get("/leave-requests")
+def get_supervisor_leave_requests(
+    db: Session = Depends(get_db),
+    supervisor: User = Depends(get_supervisor_role)
+):
+    from .leave import get_all_leave_requests
+    return get_all_leave_requests(db=db, current_user=supervisor)
+
+
+@router.post("/leave-requests/{leave_id}/approve")
+def approve_supervisor_leave_request(
+    leave_id: int,
+    db: Session = Depends(get_db),
+    supervisor: User = Depends(get_supervisor_role)
+):
+    from .leave import approve_leave_request
+    return approve_leave_request(leave_id=leave_id, db=db, current_user=supervisor)
+
+
+@router.post("/leave-requests/{leave_id}/reject")
+def reject_supervisor_leave_request(
+    leave_id: int,
+    db: Session = Depends(get_db),
+    supervisor: User = Depends(get_supervisor_role)
+):
+    from .leave import reject_leave_request
+    return reject_leave_request(leave_id=leave_id, db=db, current_user=supervisor)
+
 

@@ -98,8 +98,8 @@ export const SupervisorSafetyAnalytics = () => {
               <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Hazard / Near Miss Categorization</Typography>
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
-                  <Pie data={data?.near_miss_analysis || []} cx="50%" cy="50%" outerRadius={80} dataKey="value" label>
-                    {(data?.near_miss_analysis || []).map((_, i) => (
+                  <Pie data={data?.hazard_categories || data?.near_miss_analysis || []} cx="50%" cy="50%" outerRadius={80} dataKey="value" label>
+                    {(data?.hazard_categories || data?.near_miss_analysis || []).map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>

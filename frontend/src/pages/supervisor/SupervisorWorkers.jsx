@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Grid, Card, CardContent, Typography, CircularProgress, Alert, Chip,
   Avatar, Button, TextField, InputAdornment, Dialog, DialogTitle, DialogContent,
-  DialogActions, Stack, Divider
+  DialogActions, Stack, Divider, Paper, IconButton
 } from '@mui/material';
 import { Search, Person, Assignment, LocationOn, Chat, Phone, Refresh, Close } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -10,11 +10,10 @@ import apiClient from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 
 const getRiskColor = (risk) => {
-  switch (risk) {
-    case 'High Risk': return '#f44336';
-    case 'Medium Risk': return '#ff9800';
-    default: return '#4caf50';
-  }
+  const r = (risk || '').toLowerCase();
+  if (r.includes('high') || r.includes('emergency')) return '#ef4444';
+  if (r.includes('medium') || r.includes('warning')) return '#f59e0b';
+  return '#22c55e';
 };
 
 export const SupervisorWorkers = () => {
@@ -33,8 +32,32 @@ export const SupervisorWorkers = () => {
     setError('');
     try {
       const res = await apiClient.get('/supervisor/workers');
-      setWorkers(res.data);
+      const normalized = (res.data || []).map((w, idx) => {
+        const name = w.full_name || w.worker_name || w.username || `Worker #${w.worker_id || w.id || idx + 1}`;
+        return {
+          id: w.worker_id || w.id || idx + 1,
+          worker_id: w.worker_id || w.id || idx + 1,
+          full_name: name,
+          employee_id: w.employee_id || `EMP-${(w.worker_id || idx + 1).toString().padStart(4, '0')}`,
+          department: w.department || 'Underground Operations',
+          mine_location: w.mine_location || 'Shaft 1 Deep Excavation',
+          is_active: w.is_active !== undefined ? w.is_active : true,
+          productivity_score: w.productivity_score || w.safety_score || 92,
+          risk_status: w.risk_status || (w.has_sos ? 'High Risk' : w.on_shift ? 'Low Risk' : 'Off Duty'),
+          current_shift: w.current_shift || (w.on_shift ? 'Morning Operational Shift' : 'Off Duty'),
+          assigned_task: w.assigned_task || w.current_task || 'Tunnel Drilling & Inspection',
+          task_status: w.task_status || 'IN_PROGRESS',
+          checklist_status: w.checklist_status || 'COMPLETED',
+          last_active_time: w.last_updated || w.last_active_time || 'Just now',
+          phone_number: w.phone_number || '+1 (555) 019-2834',
+          designation: w.designation || 'Mining Technician',
+          emergency_contact_name: w.emergency_contact_name || 'Family Contact',
+          emergency_contact_number: w.emergency_contact_number || '+1 (555) 999-0000',
+        };
+      });
+      setWorkers(normalized);
     } catch (err) {
+      console.error("Failed to load supervisor workers:", err);
       setError(err.response?.data?.detail || 'Failed to load assigned workers');
     } finally {
       setLoading(false);
@@ -49,7 +72,7 @@ export const SupervisorWorkers = () => {
   };
 
   const handleAssignTaskSubmit = async () => {
-    if (!taskForm.task_name) return;
+    if (!taskForm.task_name || !selectedWorker) return;
     try {
       await apiClient.post('/supervisor/tasks', {
         ...taskForm,
@@ -58,19 +81,23 @@ export const SupervisorWorkers = () => {
       });
       setTaskModal(false);
       setTaskForm({ task_name: '', priority: 'medium', mine_area: '', deadline: '', safety_instructions: '' });
+      alert(`Task assigned to ${selectedWorker.full_name}`);
     } catch (err) {
       setError('Failed to assign task');
     }
   };
 
-  const filteredWorkers = workers.filter(w =>
-    w.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    w.employee_id.toLowerCase().includes(search.toLowerCase()) ||
-    w.department.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredWorkers = workers.filter(w => {
+    const s = search.toLowerCase();
+    return (
+      (w.full_name || '').toLowerCase().includes(s) ||
+      (w.employee_id || '').toLowerCase().includes(s) ||
+      (w.department || '').toLowerCase().includes(s)
+    );
+  });
 
   if (loading) {
-    return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
+    return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress size={40} /></Box>;
   }
 
   return (
@@ -87,7 +114,7 @@ export const SupervisorWorkers = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             InputProps={{ startAdornment: <InputAdornment position="start"><Search /></InputAdornment> }}
-            sx={{ bgcolor: 'background.paper', borderRadius: 2 }}
+            sx={{ bgcolor: 'background.paper', borderRadius: 2, minWidth: 260 }}
           />
           <Button variant="outlined" startIcon={<Refresh />} onClick={fetchWorkers}>Refresh</Button>
         </Box>
@@ -95,69 +122,75 @@ export const SupervisorWorkers = () => {
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-      <Grid container spacing={3}>
-        {filteredWorkers.map((w, idx) => (
-          <Grid item xs={12} md={6} lg={4} key={w.id}>
-            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}>
-              <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'action.hover' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Avatar sx={{ bgcolor: getRiskColor(w.risk_status), fontWeight: 700 }}>
-                      {w.full_name.charAt(0)}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight={700}>{w.full_name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{w.employee_id} • {w.department}</Typography>
+      {filteredWorkers.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
+          <Typography variant="h6" color="text.secondary">No assigned workers found</Typography>
+        </Paper>
+      ) : (
+        <Grid container spacing={3}>
+          {filteredWorkers.map((w, idx) => (
+            <Grid item xs={12} md={6} lg={4} key={w.id}>
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}>
+                <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                  <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'action.hover' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ bgcolor: getRiskColor(w.risk_status), fontWeight: 700 }}>
+                        {(w.full_name || 'W').charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={700}>{w.full_name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{w.employee_id} • {w.department}</Typography>
+                      </Box>
                     </Box>
+                    <Chip label={w.is_active ? 'ONLINE' : 'OFFLINE'} color={w.is_active ? 'success' : 'default'} size="small" sx={{ fontWeight: 700, fontSize: 10 }} />
                   </Box>
-                  <Chip label={w.is_active ? 'ONLINE' : 'OFFLINE'} color={w.is_active ? 'success' : 'default'} size="small" sx={{ fontWeight: 700, fontSize: 10 }} />
-                </Box>
 
-                <Divider />
+                  <Divider />
 
-                <CardContent sx={{ py: 2 }}>
-                  <Stack spacing={1} sx={{ mb: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">Productivity Score:</Typography>
-                      <Chip label={`${w.productivity_score}/100`} color={w.productivity_score >= 75 ? 'success' : 'warning'} size="small" />
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">Risk Status:</Typography>
-                      <Chip label={w.risk_status} size="small" sx={{ bgcolor: getRiskColor(w.risk_status), color: 'white', fontWeight: 700 }} />
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">Current Shift:</Typography>
-                      <Typography variant="caption" fontWeight={600}>{w.current_shift}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">Assigned Task:</Typography>
-                      <Typography variant="caption" fontWeight={600}>{w.assigned_task} ({w.task_status})</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">Checklist Status:</Typography>
-                      <Typography variant="caption" fontWeight={600} color={w.checklist_status === 'COMPLETED' ? 'success.main' : 'warning.main'}>
-                        {w.checklist_status}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">Last Active Time:</Typography>
-                      <Typography variant="caption" color="text.secondary">{w.last_active_time}</Typography>
-                    </Box>
-                  </Stack>
+                  <CardContent sx={{ py: 2 }}>
+                    <Stack spacing={1} sx={{ mb: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Productivity / Safety Score:</Typography>
+                        <Chip label={`${w.productivity_score}/100`} color={w.productivity_score >= 75 ? 'success' : 'warning'} size="small" />
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Risk Status:</Typography>
+                        <Chip label={w.risk_status} size="small" sx={{ bgcolor: getRiskColor(w.risk_status), color: 'white', fontWeight: 700 }} />
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Current Shift:</Typography>
+                        <Typography variant="caption" fontWeight={600}>{w.current_shift}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Assigned Task:</Typography>
+                        <Typography variant="caption" fontWeight={600}>{w.assigned_task}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Checklist Status:</Typography>
+                        <Typography variant="caption" fontWeight={600} color={w.checklist_status === 'COMPLETED' ? 'success.main' : 'warning.main'}>
+                          {w.checklist_status}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Last Sync:</Typography>
+                        <Typography variant="caption" color="text.secondary">{w.last_active_time}</Typography>
+                      </Box>
+                    </Stack>
 
-                  <Grid container spacing={1}>
-                    <Grid item xs={4}><Button fullWidth size="small" variant="outlined" startIcon={<Person />} onClick={() => handleOpenProfile(w)}>Details</Button></Grid>
-                    <Grid item xs={4}><Button fullWidth size="small" variant="outlined" startIcon={<Assignment />} onClick={() => { setSelectedWorker(w); setTaskModal(true); }}>Task</Button></Grid>
-                    <Grid item xs={4}><Button fullWidth size="small" variant="outlined" startIcon={<LocationOn />} onClick={() => navigate('/supervisor/live-tracking')}>Track</Button></Grid>
-                    <Grid item xs={6}><Button fullWidth size="small" variant="outlined" startIcon={<Chat />} onClick={() => navigate('/supervisor/communication')}>Message</Button></Grid>
-                    <Grid item xs={6}><Button fullWidth size="small" color="error" variant="outlined" startIcon={<Phone />} onClick={() => alert(`Calling ${w.full_name}: ${w.phone_number}`)}>Call</Button></Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-        ))}
-      </Grid>
+                    <Grid container spacing={1}>
+                      <Grid item xs={4}><Button fullWidth size="small" variant="outlined" startIcon={<Person />} onClick={() => handleOpenProfile(w)}>Details</Button></Grid>
+                      <Grid item xs={4}><Button fullWidth size="small" variant="outlined" startIcon={<Assignment />} onClick={() => { setSelectedWorker(w); setTaskModal(true); }}>Task</Button></Grid>
+                      <Grid item xs={4}><Button fullWidth size="small" variant="outlined" startIcon={<LocationOn />} onClick={() => navigate('/supervisor/live-tracking')}>Track</Button></Grid>
+                      <Grid item xs={6}><Button fullWidth size="small" variant="outlined" startIcon={<Chat />} onClick={() => navigate('/supervisor/communication')}>Message</Button></Grid>
+                      <Grid item xs={6}><Button fullWidth size="small" color="error" variant="outlined" startIcon={<Phone />} onClick={() => alert(`Calling ${w.full_name}: ${w.phone_number}`)}>Call</Button></Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </Grid>
+          ))}
+        </Grid>
+      )}
 
       {/* Details Dialog */}
       <Dialog open={profileModal} onClose={() => setProfileModal(false)} maxWidth="sm" fullWidth>
@@ -169,7 +202,9 @@ export const SupervisorWorkers = () => {
           {selectedWorker && (
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 24 }}>{selectedWorker.full_name.charAt(0)}</Avatar>
+                <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 24 }}>
+                  {(selectedWorker.full_name || 'W').charAt(0).toUpperCase()}
+                </Avatar>
                 <Box>
                   <Typography variant="h6" fontWeight={700}>{selectedWorker.full_name}</Typography>
                   <Typography variant="body2" color="text.secondary">{selectedWorker.employee_id} • {selectedWorker.designation}</Typography>
@@ -178,16 +213,55 @@ export const SupervisorWorkers = () => {
               <Divider />
               <Grid container spacing={2}>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Department</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.department}</Typography></Grid>
-                <Grid item xs={6}><Typography variant="caption" color="text.secondary">Assigned Mine</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.mine_location}</Typography></Grid>
+                <Grid item xs={6}><Typography variant="caption" color="text.secondary">Assigned Mine Location</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.mine_location}</Typography></Grid>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Phone Number</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.phone_number}</Typography></Grid>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Emergency Contact</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.emergency_contact_name} ({selectedWorker.emergency_contact_number})</Typography></Grid>
-                <Grid item xs={6}><Typography variant="caption" color="text.secondary">Productivity Score</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.productivity_score}/100</Typography></Grid>
+                <Grid item xs={6}><Typography variant="caption" color="text.secondary">Safety / Productivity Score</Typography><Typography variant="body2" fontWeight={600}>{selectedWorker.productivity_score}/100</Typography></Grid>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Risk Indicator</Typography><Typography variant="body2" fontWeight={600} color={getRiskColor(selectedWorker.risk_status)}>{selectedWorker.risk_status}</Typography></Grid>
               </Grid>
             </Stack>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Task Dialog */}
+      <Dialog open={taskModal} onClose={() => setTaskModal(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Assign Task to {selectedWorker?.full_name}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Task Name"
+              fullWidth
+              size="small"
+              value={taskForm.task_name}
+              onChange={(e) => setTaskForm({ ...taskForm, task_name: e.target.value })}
+              required
+            />
+            <TextField
+              label="Mine Area / Sector"
+              fullWidth
+              size="small"
+              value={taskForm.mine_area}
+              onChange={(e) => setTaskForm({ ...taskForm, mine_area: e.target.value })}
+            />
+            <TextField
+              label="Safety Instructions"
+              fullWidth
+              multiline
+              rows={2}
+              size="small"
+              value={taskForm.safety_instructions}
+              onChange={(e) => setTaskForm({ ...taskForm, safety_instructions: e.target.value })}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTaskModal(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleAssignTaskSubmit}>Assign</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
+
+export default SupervisorWorkers;

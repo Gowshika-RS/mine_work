@@ -29,7 +29,7 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const selectedRole = params.get('role');
-    if (selectedRole && ['worker', 'supervisor', 'admin'].includes(selectedRole)) {
+    if (selectedRole && ['worker', 'supervisor', 'admin', 'emergency_officer'].includes(selectedRole)) {
       setRole(selectedRole);
     }
   }, [location.search]);
@@ -77,6 +77,8 @@ export const Login = ({ setIsAuthenticated, setUserRole }) => {
           ? '/admin/dashboard'
           : userRoleFromBackend === 'supervisor'
           ? '/supervisor/dashboard'
+          : userRoleFromBackend === 'emergency_officer'
+          ? '/emergency/dashboard'
           : '/worker/dashboard';
 
       navigate(targetPath, { replace: true });

@@ -8,7 +8,7 @@
 ![Gemini AI](https://img.shields.io/badge/Gemini_Vision-1.5_Flash-8E75FF?style=for-the-badge&logo=google)
 ![Languages](https://img.shields.io/badge/Languages-11_Supported-FF6B6B?style=for-the-badge)
 
-> **MineGuard** is a comprehensive software simulation & AI analytics platform engineered for underground mining operations. It combines real-time worker telemetry, computer vision PPE gear verification, AI-driven hazard reporting, dynamic personal safety scoring, emergency distress dispatch (SOS), and real-time environment gas monitoring (CH₄, CO, AQI).
+> **MineGuard** is a comprehensive enterprise software & AI analytics platform engineered for underground mining operations. It combines real-time worker telemetry, computer vision PPE verification, AI-driven hazard reporting, dynamic personal safety scoring, real-time WebSocket distress dispatch (SOS), cross-role team communications, unified leave management, and an Emergency Officer command center for disaster evacuation and rescue operations.
 
 ---
 
@@ -16,8 +16,12 @@
 - [✨ Key Features](#-key-features)
   - [👷 Worker Module](#-worker-module)
   - [🦺 Supervisor Module](#-supervisor-module)
+  - [🚨 Emergency Officer Command Suite](#-emergency-officer-command-suite)
   - [👑 Admin Command Center](#-admin-command-center)
+  - [💬 Unified Team Communications](#-unified-team-communications)
+  - [🏖️ Cross-Role Leave Request System](#️-cross-role-leave-request-system)
 - [🌐 Multi-Language Support (i18n)](#-multi-language-support-i18n)
+- [🔑 Default Test Credentials](#-default-test-credentials)
 - [🧠 AI & Vision Model Architecture](#-ai--vision-model-architecture)
 - [🛠️ Tech Stack](#️-tech-stack)
 - [⚙️ Installation & Local Setup](#️-installation--local-setup)
@@ -29,32 +33,51 @@
 ## ✨ Key Features
 
 ### 👷 Worker Module
-- **AI Camera PPE Verification**: Real-time camera scan checking safety hard hats, high-vis vests, respirators, and goggles using computer vision.
-- **Dynamic Personal Safety Score**: Algorithmic safety rating (0–100) dynamically computed from pre-shift checklists, PPE verification, attendance punctuality, and incident-free history.
-- **Instant Emergency SOS Panic Button**: 1-click GPS distress beacon broadcasting worker coordinates and telemetry to control rooms and supervisors via WebSockets.
-- **AI Multimodal Hazard Reporting**: Submit underground hazards via photo capture, voice notes, or text description with automatic AI severity classification.
-- **Offline Hazard Sync**: Seamless PWA offline storage using `IndexedDB` / `LocalStorage` that automatically syncs hazard logs when internet connection is restored.
-- **Safe Zone Evacuation Navigation**: Interactive underground mine grid map showing evacuation routes, safe zones, and hazard overlays.
-- **Camera Facial Attendance**: Automated check-in/check-out verification using facial embedding matching.
+- **AI Camera PPE Verification**: Real-time camera scan verifying safety hard hats, high-vis vests, respirators, and goggles using OpenCV computer vision.
+- **Dynamic Personal Safety Score**: Algorithmic safety rating (0–100) dynamically computed from pre-shift checklists, PPE verification, punctuality, and incident history.
+- **Instant Emergency SOS Panic Button**: 1-click distress beacon broadcasting real-time coordinates and heart-rate telemetry to control rooms via WebSockets.
+- **AI Multimodal Hazard Reporting**: Submit underground hazards via photo capture, voice notes, or text with automatic AI severity classification.
+- **Worker Leave Requests**: Apply for shift leave (`/worker/leave`) with real-time status tracking (Pending, Approved, Rejected).
+- **Real-Time Team Chat**: Direct 1-to-1 chat with supervisors, admins, and rescue officers with photo and voice note attachments (`/worker/chat`).
+- **Offline Hazard Sync**: Progressive Web App (PWA) offline storage using `IndexedDB` that auto-syncs logs when connection is restored.
+- **Safe Zone Evacuation Navigation**: Interactive mine grid map showing evacuation routes, safe havens, and hazard overlays.
 
 ### 🦺 Supervisor Module
-- **Shift Control Center**: Real-time underground telemetry monitoring workers inside/outside shafts.
-- **Emergency SOS Dispatch Center**: Active alert monitoring with quick-dispatch emergency response actions.
-- **Team Safety Analytics**: Group safety score breakdown, overtime threshold alerts, and compliance trends.
-- **Shift Handover Logs**: Digital logbook for operational transitions between mining shifts.
-- **Geofence Violation Alerts**: Real-time warnings when workers breach restricted or hazardous mine sectors.
+- **Assigned Team Monitoring**: Real-time telemetry, productivity ratings, and live tracking of all underground workers (`/supervisor/workers`).
+- **Real Mine Zones & Geofencing**: Complete CRUD management for mine zones, danger boundaries, and geofence alerts (`/supervisor/zones`).
+- **Live Environmental Telemetry**: Real-time IoT sensor readings (Methane CH₄, Carbon Monoxide CO, Oxygen O₂, Temp, AQI) with manual sensor override tools (`/supervisor/environment`).
+- **Leave Request Approvals**: Review team leave applications with 1-click Approve/Reject controls, plus supervisor leave application portal (`/supervisor/leave`).
+- **Shift Handover & Task Management**: Digital shift handover logbook and real-time task assignments for underground personnel.
+- **Safety Analytics Dashboard**: Daily incident trends, safety score distributions, gas concentration historical graphs, and hazard categorization (`/supervisor/analytics`).
+
+### 🚨 Emergency Officer Command Suite
+- **Dedicated Emergency Role (`emergency_officer`)**: Specialized high-priority command console for disaster management and rescue operations (`/emergency/dashboard`).
+- **Live Rescue Map & SOS Center**: Real-time distress map pinpointing worker distress beacons with 1-click squad deployment and status resolution (`/emergency/sos-center`).
+- **Rescue Squad Dispatch**: Assign and track specialized underground rescue teams with live ETA and status updates (`/emergency/dispatch`).
+- **Emergency Broadcast Sirens**: Mine-wide siren activation, voice evacuation broadcasts, and toxic gas alarms (`/emergency/broadcast`).
+- **Incident Audit Logs**: Comprehensive incident logs and post-disaster audit reporting (`/emergency/incidents`).
+- **Emergency Officer Leave Portal**: Manage officer availability and log emergency officer coverage (`/emergency/leave`).
 
 ### 👑 Admin Command Center
-- **Mine Safety Command Dashboard**: Aggregate real-time telemetry displaying worker counts, gas sensor levels (Methane CH₄, Carbon Monoxide CO), air quality (AQI), and critical alerts.
-- **Role-Based Access Control (RBAC)**: Comprehensive user management for Admin, Supervisor, and Worker accounts.
-- **Audit Logging & Report Exports**: Generate downloadable safety audit logs and compliance PDF reports.
-- **Environmental Threshold Calibration**: Configure mine zone safety thresholds for ambient temperature, humidity, and gas concentrations.
+- **Executive Safety Dashboard**: High-level real-time overview displaying active workforce numbers, gas sensor alerts, hazard distribution, and emergency statuses.
+- **Site-Wide Leave Management**: Executive leave management dashboard (`/admin/leave`) with role filtering (Worker, Supervisor, Emergency Officer, Admin) and approval authority.
+- **Role-Based Access Control (RBAC)**: Manage credentials, roles, and status for Workers, Supervisors, Emergency Officers, and Administrators (`/admin/users`).
+- **Audit Logging & Report Exports**: Downloadable safety audit logs, shift records, and PDF report generation.
+
+### 💬 Unified Team Communications
+- **Cross-Role Interoperability**: Real-time communication hub linking Workers, Supervisors, Emergency Officers, and Admins via WebSockets.
+- **Group Broadcast Channels**: Send target broadcasts to specific roles (`workers`, `supervisors`, `admins`, `emergency_officers`) or mine-wide announcements (`all`).
+- **Multimodal Sharing**: Send text, images, voice notes, and documents across all roles.
+
+### 🏖️ Cross-Role Leave Request System
+- **Universal Application Portal**: Workers, Supervisors, Emergency Officers, and Admins can submit leave applications with start date, end date, and rationale.
+- **Hierarchical Approval Workflow**: Supervisors, Emergency Officers, and Admins can review, approve, or reject pending requests in real-time.
 
 ---
 
 ## 🌐 Multi-Language Support (i18n)
 
-MineGuard features **100% full application UI translation** using `i18next` and `react-i18next`. Switching languages updates all navigation sidebars, page headers, dynamic widgets, status badges, buttons, and chart labels **instantly without page reload**.
+MineGuard features **100% full UI translation** powered by `i18next`. Switching languages updates sidebars, headers, dynamic widgets, status badges, buttons, and charts **instantly without page reloads**.
 
 | Language | Code | Native Script |
 | :--- | :--- | :--- |
@@ -69,6 +92,17 @@ MineGuard features **100% full application UI translation** using `i18next` and 
 | **Gujarati** | `gu` | ગુજરાતી |
 | **Punjabi** | `pa` | ਪੰਜਾਬੀ |
 | **Urdu** | `ur` | اردو |
+
+---
+
+## 🔑 Default Test Credentials
+
+| Role | Username | Password | Default Dashboard |
+| :--- | :--- | :--- | :--- |
+| **Admin** | `admin` | `admin123` | `/admin/dashboard` |
+| **Supervisor** | `supervisor` | `supervisorpassword` | `/supervisor/dashboard` |
+| **Emergency Officer** | `emergency_officer` | `emergency123` | `/emergency/dashboard` |
+| **Worker** | `worker` | `worker123` | `/worker/dashboard` |
 
 ---
 
@@ -91,13 +125,13 @@ MineGuard features **100% full application UI translation** using `i18next` and 
 - **State & Router**: React Router v6, React Context API
 - **Internationalization**: `i18next`, `react-i18next`
 - **Charts & Motion**: Recharts, Framer Motion
-- **Networking**: Axios, Native WebSockets
+- **Networking**: Axios, Native WebSockets (`websockets`)
 
 ### Backend
 - **Framework**: FastAPI (Python 3.10+)
 - **Database**: SQLite / MySQL via SQLAlchemy ORM
 - **Authentication**: OAuth2 JWT Tokens + Passlib (Bcrypt)
-- **Real-Time Messaging**: FastAPI WebSockets Manager
+- **Real-Time Messaging**: FastAPI WebSockets Manager (`websockets`, `uvicorn[standard]`)
 - **Computer Vision**: OpenCV (`opencv-python`), Pillow, Google Generative AI (`google-generativeai`)
 
 ---
@@ -129,8 +163,9 @@ venv\Scripts\activate
 # On Linux/macOS:
 source venv/bin/activate
 
-# Install dependencies
+# Install dependencies including uvicorn standard & websockets
 pip install -r requirements.txt
+pip install websockets uvicorn[standard]
 
 # Seed initial database records
 python seed.py
@@ -162,7 +197,7 @@ Frontend Web App will be accessible at: `http://localhost:5173`
         │                                              │
         ├──────────── (WebSocket Feed) ────────────────┤
         │                                              │
-[ AI Camera Stream ] ─── (OpenCV / Gemini AI) ─────────┴─────────> [ Control Room Telemetry ]
+[ AI Camera Stream ] ─── (OpenCV / Gemini AI) ─────────┴─────────> [ Emergency & Control Telemetry ]
 ```
 
 ---
